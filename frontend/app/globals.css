@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fbfaf9;
+  --foreground: #141110;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  :focus-visible {
+    outline: 2px solid #8f0f24;
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  ::selection {
+    background: #8f0f24;
+    color: #fff;
+  }
+}
+
+@layer components {
+  .container-x {
+    @apply mx-auto w-full max-w-content px-5 sm:px-8;
+  }
+  .eyebrow {
+    @apply font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted;
+  }
+  .link-underline {
+    @apply underline decoration-mist-deep decoration-1 underline-offset-4 transition-colors hover:decoration-bordeaux;
+  }
+  /* Subtle dot-grid field, a quiet echo of the brand's dotted motif. */
+  .dotgrid {
+    background-image: radial-gradient(rgba(143, 15, 36, 0.14) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .dotgrid-faint {
+    background-image: radial-gradient(rgba(20, 17, 16, 0.06) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  /* Thin brand underline rule under section titles (deck signature). */
+  .rule-accent::after {
+    content: "";
+    @apply mt-3 block h-[3px] w-12 rounded-full bg-bordeaux;
+  }
+}
+
+@layer utilities {
+  /* ScrollFloat. Text is VISIBLE by default (no flash before hydration).
+     JS adds `sf-armed` only to elements below the fold, then `sf-in` reveals
+     them as they scroll into view. */
+  .sf-char {
+    display: inline-block;
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+  }
+  .sf-armed .sf-char {
+    opacity: 0;
+    transform: translateY(0.5em) rotateX(28deg);
+    transform-origin: 0% 50%;
+  }
+  .sf-armed.sf-in .sf-char {
+    opacity: 1;
+    transform: translateY(0) rotateX(0deg);
+  }
+  .sf-block {
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .sf-block.sf-armed {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  .sf-block.sf-armed.sf-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .sf-char,
+  .sf-block {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

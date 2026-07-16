@@ -1,0 +1,41 @@
+{
+  "note": "Scaffold for the proprietary template + accuracy database. In production this is the moat: AI-drafted model templates are human-reviewed, tested, versioned, and their live accuracy tracked here. Runtime only selects and parameterizes; it never authors code at run time.",
+  "templates": [
+    {
+      "model_key": "tariff",
+      "version": "1.0.0",
+      "status": "validated",
+      "authored_by": "human",
+      "validated_on": "2026-05-02",
+      "backtests": 41,
+      "accuracy": {"metric": "PV error vs realized", "mape": 0.11, "coverage_p10_p90": 0.83}
+    },
+    {
+      "model_key": "supplier_health",
+      "version": "1.0.0",
+      "status": "validated",
+      "authored_by": "ai-drafted, human-reviewed",
+      "validated_on": "2026-06-18",
+      "backtests": 28,
+      "accuracy": {"metric": "distress calibration (Brier)", "brier": 0.09, "coverage_p10_p90": 0.86}
+    },
+    {
+      "model_key": "country",
+      "version": "1.0.0",
+      "status": "validated",
+      "authored_by": "human",
+      "validated_on": "2026-06-01",
+      "backtests": 33,
+      "accuracy": {"metric": "loss coverage", "coverage_p10_p90": 0.88}
+    },
+    {
+      "model_key": "cyber",
+      "version": "1.0.0",
+      "status": "validated",
+      "authored_by": "ai-drafted, human-reviewed",
+      "validated_on": "2026-06-22",
+      "backtests": 19,
+      "accuracy": {"metric": "FAIR tail coverage", "coverage_p95": 0.94}
+    }
+  ]
+}

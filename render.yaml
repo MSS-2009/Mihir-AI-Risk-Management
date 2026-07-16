@@ -1,0 +1,19 @@
+# Render Blueprint for the Avenoir backend (FastAPI).
+# In Render: New + > Blueprint > connect this repo. Render reads this file.
+# Then set ANTHROPIC_API_KEY in the service's Environment tab (marked sync:false).
+services:
+  - type: web
+    name: avenoir-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false # set this manually in the Render dashboard, never in git
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
+      - key: PYTHON_VERSION
+        value: "3.12"
