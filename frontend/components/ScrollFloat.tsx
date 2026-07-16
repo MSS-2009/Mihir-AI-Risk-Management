@@ -16,17 +16,30 @@ function useScrollFloat<T extends HTMLElement>() {
     const belowFold = rect.top > window.innerHeight * 0.9;
     if (!belowFold) return; // in or above view: stay visible, no animation
     setCls("sf-armed");
+
+    let done = false;
+    const reveal = () => {
+      if (done) return;
+      done = true;
+      setCls("sf-armed sf-in");
+      io.disconnect();
+      window.removeEventListener("scroll", onScroll);
+    };
+    // Primary: IntersectionObserver.
     const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          setCls("sf-armed sf-in");
-          io.disconnect();
-        }
-      },
+      ([e]) => e.isIntersecting && reveal(),
       { threshold: 0.15, rootMargin: "0px 0px -6% 0px" }
     );
     io.observe(el);
-    return () => io.disconnect();
+    // Failsafe: a passive scroll listener, in case IO does not fire.
+    const onScroll = () => {
+      if (el.getBoundingClientRect().top < window.innerHeight * 0.9) reveal();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      io.disconnect();
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
   return { ref, cls };
 }

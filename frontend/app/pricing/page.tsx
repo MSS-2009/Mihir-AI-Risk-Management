@@ -22,7 +22,7 @@ const ROWS: Row[] = [
 ];
 
 const TIERS = [
-  { id: "free", name: "Free", price: "$0", note: "Everything you need to get a defensible number.", cta: "Run the assessment", href: "/dashboard", highlight: false },
+  { id: "free", name: "Free", price: "$0", note: "Everything you need to get a defensible number.", cta: "Start free", href: "/upload", highlight: false },
   { id: "growth", name: "Growth", price: "$1K", per: "/mo", note: "History, benchmarking, scheduled pulls, exports.", cta: "Coming soon", href: "/dashboard", highlight: true },
   { id: "cont", name: "Continuous", price: "$5K", per: "/mo", note: "Live connector, continuous re-sim, alerting.", cta: "Coming soon", href: "/dashboard", highlight: false },
 ];
