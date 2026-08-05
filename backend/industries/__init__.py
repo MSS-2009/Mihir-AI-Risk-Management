@@ -2,10 +2,19 @@
 and register it here. No engine code changes.
 """
 from .base import EngineBinding, IndustryPack, Question
+from .automotive import PACK as AUTOMOTIVE
+from .clinical import PACK as CLINICAL
 from .distribution import PACK as DISTRIBUTION
+from .property_data import PACK as PROPERTY_DATA
+from .wealth import PACK as WEALTH
 
+# Display order for the industry selection screen.
 INDUSTRY_REGISTRY: dict[str, IndustryPack] = {
     p.id: p for p in [
+        AUTOMOTIVE,
+        PROPERTY_DATA,
+        CLINICAL,
+        WEALTH,
         DISTRIBUTION,
     ]
 }

@@ -31,8 +31,18 @@ from industries import INDUSTRY_REGISTRY, get_pack  # noqa: E402
 # Pinned at n_sims=50,000 with the section 2.6 text matrix (4 named pairs over a
 # 0.20 baseline). These supersede the spec's 2.5 and 4.10.3 tables.
 TARGETS = {
+    # Distribution is the user-pinned pair; the rest were regenerated at the
+    # same settings. Every EAL sits within 0.2% of the spec's 2.5 table.
     "industrial_distribution": {"eal": 1_884_905, "p99": 5_648_970},
+    "automotive_manufacturing": {"eal": 2_766_969, "p99": 9_458_844},
+    "property_data": {"eal": 1_524_961, "p99": 5_839_507},
+    "clinical_research": {"eal": 1_273_965, "p99": 4_490_518},
+    "wealth_management": {"eal": 898_617, "p99": 3_453_871},
 }
+
+# Spec 2.5 sanity band: every industry should price out between roughly 1% and
+# 2.3% of revenue. Outside that, a pack is miscalibrated regardless of tests.
+REVENUE_SHARE_BAND = (0.010, 0.023)
 
 
 def _assess(industry: str, **kw):
@@ -45,20 +55,62 @@ def _pct(out, p):
     return next(e["loss"] for e in out["exceedance_curve"] if e["percentile"] == p)
 
 
-def test_distribution_expected_loss_regression():
-    """EAL is the stable target. Tight tolerance."""
-    out = _assess("industrial_distribution")
-    t = TARGETS["industrial_distribution"]["eal"]
-    rel = abs(out["expected_annual_loss"] / t - 1)
-    assert rel < EAL_REGRESSION_TOL, f"EAL {out['expected_annual_loss']:,.0f} vs {t:,.0f} ({rel:.3%})"
+def test_expected_loss_regression_all_industries():
+    """EAL is the stable target. Tight tolerance, every industry."""
+    for industry, t in TARGETS.items():
+        out = _assess(industry)
+        rel = abs(out["expected_annual_loss"] / t["eal"] - 1)
+        assert rel < EAL_REGRESSION_TOL, (
+            f"{industry}: EAL {out['expected_annual_loss']:,.0f} vs {t['eal']:,.0f} ({rel:.3%})"
+        )
 
 
-def test_distribution_p99_regression():
-    """P99 is not stable better than ~3%. Loose tolerance, deliberately."""
-    out = _assess("industrial_distribution")
-    t = TARGETS["industrial_distribution"]["p99"]
-    rel = abs(_pct(out, 99) / t - 1)
-    assert rel < TAIL_REGRESSION_TOL, f"P99 {_pct(out, 99):,.0f} vs {t:,.0f} ({rel:.3%})"
+def test_p99_regression_all_industries():
+    """P99 is not stable better than ~3%. Loose tolerance, deliberately: this
+    is a property of tail estimation, and tightening it only manufactures
+    phantom failures."""
+    for industry, t in TARGETS.items():
+        out = _assess(industry)
+        rel = abs(_pct(out, 99) / t["p99"] - 1)
+        assert rel < TAIL_REGRESSION_TOL, (
+            f"{industry}: P99 {_pct(out, 99):,.0f} vs {t['p99']:,.0f} ({rel:.3%})"
+        )
+
+
+def test_every_industry_prices_plausibly_against_revenue():
+    """A CFO sanity check that no unit test would otherwise catch: total
+    modelled exposure should land in single-digit-percent territory."""
+    lo, hi = REVENUE_SHARE_BAND
+    for industry in INDUSTRY_REGISTRY:
+        pack = get_pack(industry)
+        share = _assess(industry)["expected_annual_loss"] / pack.reference_revenue
+        assert lo <= share <= hi, f"{industry}: {share:.2%} of revenue, outside {lo:.1%}-{hi:.1%}"
+
+
+def test_all_five_industries_registered():
+    assert len(INDUSTRY_REGISTRY) == 5, sorted(INDUSTRY_REGISTRY)
+    assert set(TARGETS) == set(INDUSTRY_REGISTRY)
+
+
+def test_every_binding_references_a_real_engine():
+    """A pack may only bind engines that actually exist."""
+    from engines.registry import ENGINE_REGISTRY
+    for industry, pack in INDUSTRY_REGISTRY.items():
+        for b in pack.bindings:
+            assert b.engine in ENGINE_REGISTRY, f"{industry} binds unknown engine '{b.engine}'"
+
+
+def test_eleven_engines_registered():
+    from engines.registry import ENGINE_REGISTRY
+    assert len(ENGINE_REGISTRY) == 11, sorted(ENGINE_REGISTRY)
+
+
+def test_every_engine_is_used_by_some_industry():
+    """A registered engine no pack reaches would show on /models as something
+    the product cannot actually run."""
+    from engines.registry import ENGINE_REGISTRY
+    used = {b.engine for p in INDUSTRY_REGISTRY.values() for b in p.bindings}
+    assert used == set(ENGINE_REGISTRY), f"unused: {set(ENGINE_REGISTRY) - used}"
 
 
 def test_closed_form_agrees_with_simulated_eal():

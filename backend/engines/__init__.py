@@ -28,8 +28,28 @@ from .fair import (
     pert_samples,
     portfolio_losses,
 )
+from .registry import ENGINE_REGISTRY, EngineSpec, engines_public, get_engine
+
+# Import side effects register the eleven engine identities.
+from . import (  # noqa: E402,F401
+    compliance,
+    concentration,
+    cyber,
+    input_cost,
+    inventory,
+    model_error,
+    recall,
+    reputational,
+    schedule,
+    site,
+    third_party,
+)
 
 __all__ = [
+    "ENGINE_REGISTRY",
+    "EngineSpec",
+    "engines_public",
+    "get_engine",
     "DEFAULT_SEED",
     "N_SIMS",
     "N_SIMS_SWEEP",
