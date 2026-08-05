@@ -5,7 +5,6 @@ import { analyze, type AnalyzeResponse } from "@/lib/api";
 import { money, pct } from "@/lib/format";
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 import { DistributionChart } from "@/components/charts/DistributionChart";
-import { DottedWaves } from "@/components/DottedWaves";
 import { ScrollFloat, ScrollReveal } from "@/components/ScrollFloat";
 
 /**
@@ -46,25 +45,22 @@ export function LiveHero() {
   const beneficial = o?.prob_reroute_beneficial ?? 0;
 
   return (
-    <section className="relative overflow-hidden border-b border-mist bg-surface">
-      <DottedWaves corner="tl" className="pointer-events-none absolute -left-10 -top-10 h-[380px] w-[380px]" drift />
-      <DottedWaves corner="br" color="#8F0F24" className="pointer-events-none absolute -bottom-16 -right-10 h-[340px] w-[340px]" opacity={0.4} />
-
-      <div className="container-x relative grid items-center gap-12 py-16 lg:grid-cols-[1.05fr_1.25fr] lg:py-24">
+    <section className="border-b border-rule bg-surface">
+      <div className="container-x grid items-center gap-12 py-16 lg:grid-cols-[1.05fr_1.25fr] lg:py-24">
         {/* Left: the argument */}
         <div>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-crimson" />
+            <span className="h-2 w-2 rounded-full bg-brand" />
             <span className="eyebrow">Enterprise risk, industrial distribution</span>
           </div>
           <div className="mt-5 flex gap-4">
-            <span className="mt-1 hidden w-[3px] shrink-0 rounded-full bg-bordeaux sm:block" />
+            <span className="mt-1 hidden w-[3px] shrink-0 rounded-full bg-brand sm:block" />
             <ScrollFloat
               as="h1"
               className="font-display text-display-lg font-extrabold"
               segments={[
                 { text: "Risk, priced in dollars.", className: "text-ink" },
-                { text: "Not “High.” Not a color.", className: "text-bordeaux" },
+                { text: "Not “High.” Not a color.", className: "text-brand" },
               ]}
             />
           </div>
@@ -75,10 +71,10 @@ export function LiveHero() {
           </ScrollReveal>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
-              href="/upload"
-              className="inline-flex items-center gap-2 rounded-lg bg-bordeaux px-5 py-3 font-semibold text-white transition-colors hover:bg-bordeaux-deep"
+              href="/start"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-3 font-semibold text-white transition-colors hover:bg-brand-deep"
             >
-              Run a real analysis →
+              Choose your industry →
             </Link>
             <Link href="/methodology" className="link-underline px-1 py-3 text-sm text-ink/70">
               See how every number is computed
@@ -87,11 +83,11 @@ export function LiveHero() {
         </div>
 
         {/* Right: the live distribution */}
-        <div className="rounded-2xl border border-mist bg-surface p-5 shadow-lift sm:p-7">
+        <div className="rounded-2xl border border-rule bg-surface p-5 shadow-lift sm:p-7">
           <div className="flex items-start justify-between gap-3">
             <div className="eyebrow max-w-[70%]">Outcome distribution · 3-yr net savings from rerouting</div>
             <span className="flex shrink-0 items-center gap-1.5 font-mono text-[0.62rem] text-muted">
-              <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-ochre" : "bg-bordeaux"}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-amber" : "bg-brand"}`} />
               {running ? "computing" : "live"}
             </span>
           </div>
@@ -118,7 +114,7 @@ export function LiveHero() {
               <label htmlFor="hero-tariff" className="text-sm font-medium text-ink">
                 Current tariff rate
               </label>
-              <span className="font-mono text-lg font-semibold tabular-nums text-bordeaux">{pct(tariff)}</span>
+              <span className="font-mono text-lg font-semibold tabular-nums text-brand">{pct(tariff)}</span>
             </div>
             <input
               id="hero-tariff"
@@ -132,19 +128,19 @@ export function LiveHero() {
                 setTariff(v);
                 debouncedRun(v);
               }}
-              className="mt-2 w-full accent-bordeaux"
+              className="mt-2 w-full accent-brand"
             />
           </div>
 
           {/* Readouts */}
-          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-mist pt-4">
+          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-rule pt-4">
             <Readout label="Downside · P10" value={o ? money(o.net_savings_pv_p10) : "-"} tone={o && o.net_savings_pv_p10 < 0 ? "ochre" : "bordeaux"} />
             <Readout label="Expected" value={o ? money(o.net_savings_pv_expected) : "-"} tone="bordeaux" />
             <Readout label="Upside · P90" value={o ? money(o.net_savings_pv_p90) : "-"} tone="bordeaux" />
           </div>
           <p className="mt-3 text-sm text-ink/80 tnum">
             Rerouting is net-beneficial in{" "}
-            <span className="font-semibold text-bordeaux">{o ? pct(beneficial) : "-"}</span> of scenarios.
+            <span className="font-semibold text-brand">{o ? pct(beneficial) : "-"}</span> of scenarios.
             {o && o.net_savings_pv_p10 < 0 && (
               <span className="text-muted"> The downside still crosses into loss, that is the risk you would be taking.</span>
             )}
@@ -159,7 +155,7 @@ function Readout({ label, value, tone }: { label: string; value: string; tone: "
   return (
     <div>
       <div className="font-mono text-[0.6rem] uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-0.5 font-mono text-sm font-semibold tabular-nums ${tone === "ochre" ? "text-ochre" : "text-ink"}`}>
+      <div className={`mt-0.5 font-mono text-sm font-semibold tabular-nums ${tone === "ochre" ? "text-amber" : "text-ink"}`}>
         {value}
       </div>
     </div>

@@ -22,16 +22,16 @@ export function ResultCard({
   probabilityLabel?: string;
   tone?: "bordeaux" | "ochre";
 }) {
-  const accent = tone === "ochre" ? "text-ochre" : "text-bordeaux";
+  const accent = tone === "ochre" ? "text-amber" : "text-brand";
   return (
-    <div className="rounded-xl border border-mist bg-surface p-5 shadow-card">
+    <div className="rounded-xl border border-rule bg-surface p-5 shadow-card">
       <div className="eyebrow">{label}</div>
       <div className={`mt-1.5 font-display text-3xl font-semibold tabular-nums ${accent}`}>
         {money(expected)}
       </div>
       <div className="mt-3 flex items-center gap-2 font-mono text-xs text-muted tnum">
         <span>{lowLabel} {money(low)}</span>
-        <span className="h-px flex-1 bg-mist-deep" />
+        <span className="h-px flex-1 bg-rule" />
         <span>{highLabel} {money(high)}</span>
       </div>
       {probability !== undefined && (
@@ -61,7 +61,7 @@ export function Stat({
       <div className="eyebrow">{label}</div>
       <div
         className={`mt-1 font-display text-2xl font-semibold tabular-nums ${
-          tone === "ochre" ? "text-ochre" : "text-ink"
+          tone === "ochre" ? "text-amber" : "text-ink"
         }`}
       >
         {value}

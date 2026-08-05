@@ -18,7 +18,7 @@ export function CurrencyInput({
   return (
     <label htmlFor={id} className="block">
       <span className="block text-sm font-medium text-ink">{label}</span>
-      <div className="mt-1 flex items-center rounded-lg border border-mist-deep bg-surface focus-within:border-bordeaux">
+      <div className="mt-1 flex items-center rounded-lg border border-rule bg-surface focus-within:border-brand">
         <span className="pl-3 font-mono text-sm text-muted">$</span>
         <input
           id={id}
@@ -59,7 +59,7 @@ export function PercentSlider({
     <label htmlFor={id} className="block">
       <div className="flex items-baseline justify-between">
         <span className="text-sm font-medium text-ink">{label}</span>
-        <span className="font-mono text-sm tabular-nums text-bordeaux">{pct(value, value < 0.1 ? 1 : 0)}</span>
+        <span className="font-mono text-sm tabular-nums text-brand">{pct(value, value < 0.1 ? 1 : 0)}</span>
       </div>
       <input
         id={id}
@@ -69,7 +69,7 @@ export function PercentSlider({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="mt-2 w-full accent-bordeaux"
+        className="mt-2 w-full accent-brand"
       />
       {help && <span className="mt-1 block text-xs text-muted">{help}</span>}
     </label>
@@ -96,7 +96,7 @@ export function NumberInput({
   return (
     <label htmlFor={id} className="block">
       <span className="block text-sm font-medium text-ink">{label}</span>
-      <div className="mt-1 flex items-center rounded-lg border border-mist-deep bg-surface focus-within:border-bordeaux">
+      <div className="mt-1 flex items-center rounded-lg border border-rule bg-surface focus-within:border-brand">
         <input
           id={id}
           type="number"
@@ -140,7 +140,7 @@ export function EntityList({
       <span className="block text-sm font-medium text-ink">{label}</span>
       <div className="mt-2 space-y-2">
         {rows.map((r, i) => (
-          <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-mist bg-paper p-2.5">
+          <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border border-rule bg-raised p-2.5">
             {fields.map((f) => (
               <label key={f.name} className="flex-1 basis-24">
                 <span className="block font-mono text-[0.6rem] uppercase tracking-wide text-muted">{f.label}</span>
@@ -153,13 +153,13 @@ export function EntityList({
                       f.type === "text" ? e.target.value : parseFloat(e.target.value.replace(/[^0-9.]/g, "")) || 0
                     )
                   }
-                  className="mt-0.5 w-full rounded border border-mist-deep bg-surface px-2 py-1 font-mono text-xs tabular-nums outline-none focus:border-bordeaux"
+                  className="mt-0.5 w-full rounded border border-rule bg-surface px-2 py-1 font-mono text-xs tabular-nums outline-none focus:border-brand"
                 />
               </label>
             ))}
             <button
               onClick={() => remove(i)}
-              className="rounded px-2 py-1 text-xs text-muted hover:text-ochre"
+              className="rounded px-2 py-1 text-xs text-muted hover:text-amber"
               aria-label={`Remove ${r.name || "row"}`}
             >
               Remove
@@ -167,7 +167,7 @@ export function EntityList({
           </div>
         ))}
       </div>
-      <button onClick={add} className="mt-2 text-sm font-medium text-bordeaux hover:text-bordeaux-deep">
+      <button onClick={add} className="mt-2 text-sm font-medium text-brand hover:text-brand-deep">
         + Add {label.replace(/s$/, "").toLowerCase()}
       </button>
     </div>

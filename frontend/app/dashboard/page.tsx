@@ -1,290 +1,360 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { assess, type AssessResponse } from "@/lib/api";
+import { assess, assessRobustness, type Assessment, type RobustnessResponse } from "@/lib/api";
 import { money, moneyCompact, pct } from "@/lib/format";
-import { Badge, Button, Card, Eyebrow, RiskBar, SectionHeading } from "@/components/ui";
+import { useSession } from "@/lib/session";
 import { ErrorPanel, LoadingPanel } from "@/components/StatePanels";
 import { InterpretationPanel } from "@/components/InterpretationPanel";
-import { CorrelationMatrix } from "@/components/CorrelationMatrix";
-import { CompositeHeadline } from "@/components/dashboard/CompositeHeadline";
-import { DottedWaves } from "@/components/DottedWaves";
-import { ScrollFloat } from "@/components/ScrollFloat";
-
-const FORMATS = [
-  { id: "executive_summary", label: "Executive summary" },
-  { id: "one_pager", label: "One-pager" },
-  { id: "list", label: "List" },
-];
+import { ExceedanceCurve } from "@/components/charts/ExceedanceCurve";
+import { HeadlineBand } from "@/components/dashboard/HeadlineBand";
+import { FragilityPanel } from "@/components/dashboard/FragilityPanel";
+import { Eyebrow } from "@/components/ui";
 
 export default function DashboardPage() {
-  const [data, setData] = useState<AssessResponse | null>(null);
+  const { industry, answers, ready } = useSession();
+  const [data, setData] = useState<Assessment | null>(null);
+  const [rob, setRob] = useState<RobustnessResponse | null>(null);
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingRob, setLoadingRob] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [format, setFormat] = useState("executive_summary");
-  const overridesRef = useRef<Record<string, number>>({});
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const [eps, setEps] = useState(0.1);
+  const robReq = useRef(0);
 
-  const load = (opts?: { correlation_overrides?: Record<string, number>; output_format?: string }) => {
+  const loadRobustness = useCallback(
+    (e: number) => {
+      if (!industry) return;
+      const id = ++robReq.current;
+      setLoadingRob(true);
+      assessRobustness({ industry, answers, eps: e })
+        .then((r) => id === robReq.current && setRob(r))
+        .catch(() => {})
+        .finally(() => id === robReq.current && setLoadingRob(false));
+    },
+    [industry, answers]
+  );
+
+  const run = useCallback(() => {
+    if (!industry) return;
     setStarted(true);
     setLoading(true);
     setError(null);
-    assess({
-      correlation_overrides: opts?.correlation_overrides ?? overridesRef.current,
-      output_format: opts?.output_format ?? format,
-    })
-      .then(setData)
+    setRob(null);
+    assess({ industry, answers })
+      .then((a) => {
+        setData(a);
+        // The dependence sweep is ~90 simulations, so it loads after the
+        // dashboard paints rather than holding it hostage.
+        loadRobustness(eps);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  };
+  }, [industry, answers, eps, loadRobustness]);
 
-  // Only auto-run when the user arrived here intending to run (from Upload).
   useEffect(() => {
+    if (!ready) return;
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("run") === "1") {
-      load();
+      run();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onCorrelationChange = (overrides: Record<string, number>) => {
-    overridesRef.current = overrides;
-    clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => load({ correlation_overrides: overrides }), 250);
+  const onEps = (v: number) => {
+    setEps(v);
+    if (data) loadRobustness(v);
   };
 
-  const maxTail = useMemo(
-    () => (data ? Math.max(...data.ranked.map((r) => r.output.risk_summary?.p95_loss || 0)) : 1),
-    [data]
-  );
+  if (ready && !industry) {
+    return (
+      <div className="container-x py-20 text-center">
+        <h1 className="font-display text-2xl font-bold text-ink">Pick an industry first</h1>
+        <p className="mt-2 text-muted">The models, questions and relationships all depend on it.</p>
+        <Link href="/start" className="mt-5 inline-block rounded-lg bg-brand px-5 py-3 font-semibold text-white hover:bg-brand-deep">
+          Choose your industry
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="container-x py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <Eyebrow>Composite assessment · Acme Industrial Distribution (sample)</Eyebrow>
-          <ScrollFloat as="h1" className="mt-2 font-display text-4xl font-bold tracking-tight sm:text-5xl"
-            segments={[{ text: "Risk", className: "text-ink" }, { text: "dashboard", className: "text-bordeaux" }]} />
+          <Eyebrow>Step 3 of 3 · composite assessment</Eyebrow>
+          <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-ink sm:text-5xl">
+            Risk dashboard
+          </h1>
         </div>
         {data && (
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[0.66rem] text-muted">Deliver as</span>
-            <div className="flex rounded-lg border border-mist bg-surface p-0.5">
-              {FORMATS.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => {
-                    setFormat(f.id);
-                    load({ output_format: f.id });
-                  }}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                    format === f.id ? "bg-bordeaux text-white" : "text-muted hover:text-ink"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-3">
+            <Link href="/intake" className="link-underline text-sm text-muted">Adjust answers</Link>
+            <button
+              onClick={run}
+              className="rounded-lg border border-rule px-3.5 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand hover:text-brand"
+            >
+              Re-run
+            </button>
           </div>
         )}
       </div>
 
-      {/* Intentional start state, no auto-run before the user asks. */}
       {!started && !data && (
-        <div className="relative mt-8 overflow-hidden rounded-2xl border border-mist bg-surface p-10 shadow-card">
-          <DottedWaves corner="br" className="pointer-events-none absolute -bottom-12 -right-8 h-64 w-64" opacity={0.3} />
-          <div className="relative max-w-xl">
+        <div className="mt-8 rounded-2xl border border-rule bg-surface p-10 shadow-card">
+          <div className="max-w-xl">
             <h2 className="font-display text-2xl font-bold text-ink">Run the composite assessment</h2>
             <p className="mt-3 text-muted">
-              This runs all six domain models plus the cross-domain correlation on the sample industrial
-              distributor profile, roughly 20,000 scenarios per domain. Nothing runs until you start it.
+              This runs every model for your industry plus the cross-domain correlation, at 50,000
+              scenarios each. Nothing runs until you start it.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button onClick={() => load()}>Run assessment →</Button>
-              <Button href="/upload" variant="outline">Start from your documents</Button>
+              <button onClick={run} className="rounded-lg bg-brand px-5 py-3 font-semibold text-white hover:bg-brand-deep">
+                Run assessment →
+              </button>
+              <Link href="/intake" className="rounded-lg border border-rule px-5 py-3 font-medium text-ink hover:border-brand hover:text-brand">
+                Review my answers
+              </Link>
             </div>
-            <p className="mt-4 font-mono text-[0.66rem] text-muted">
-              Tip: upload documents first to run the assessment on your own numbers.
-            </p>
           </div>
         </div>
       )}
 
-      {loading && !data && <div className="mt-8"><LoadingPanel /></div>}
-      {error && <div className="mt-8"><ErrorPanel error={error} onRetry={() => load()} /></div>}
+      {loading && !data && (
+        <div className="mt-8">
+          <LoadingPanel title="Running 50,000 scenarios" detail="Sampling each domain, then correlating the tails with a t-copula." />
+        </div>
+      )}
+      {error && <div className="mt-8"><ErrorPanel error={error} onRetry={run} /></div>}
 
       {data && (
-        <div className={`mt-8 space-y-10 ${loading ? "opacity-60 transition-opacity" : ""}`}>
-          {data.composite && !data.composite.insufficient_domains && (
-            <CompositeHeadline c={data.composite} />
-          )}
+        <div className={`mt-8 space-y-8 ${loading ? "opacity-60 transition-opacity" : ""}`}>
+          <HeadlineBand a={data} r={rob} loadingRobustness={loadingRob} />
 
-          {/* Domains + correlation */}
-          <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-            <div>
-              <SectionHeading eyebrow="By domain" title="Standalone exposure" intro="Ranked by P95 tail. Open any domain to interrogate its assumptions." />
-              <div className="mt-5 space-y-3">
-                {data.ranked.map((r) => {
-                  const rs = r.output.risk_summary;
-                  return (
-                    <Link
-                      key={r.key}
-                      href={`/analyze/${r.key}`}
-                      className="block rounded-xl border border-mist bg-surface p-4 shadow-card transition hover:border-bordeaux/40"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-ink">{r.name}</span>
-                        <span className="font-mono text-sm tabular-nums text-ink">{money(rs?.expected_loss)}</span>
-                      </div>
-                      <div className="mt-2.5">
-                        <RiskBar value={rs?.p95_loss || 0} max={maxTail} tone="ochre" />
-                      </div>
-                      <div className="mt-1.5 flex justify-between font-mono text-[0.66rem] text-muted tnum">
-                        <span>{r.domain}</span>
-                        <span>P95 tail {moneyCompact(rs?.p95_loss)}</span>
-                      </div>
-                    </Link>
-                  );
-                })}
+          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="rounded-2xl border border-rule bg-surface p-6 shadow-card">
+              <Eyebrow>Loss exceedance</Eyebrow>
+              <h2 className="mt-1 font-display text-xl font-bold text-ink">How bad it gets, by percentile</h2>
+              <div className="mt-4">
+                <ExceedanceCurve
+                  correlated={data.exceedance_curve}
+                  independent={data.exceedance_curve_independent}
+                />
               </div>
+              <p className="mt-2 flex flex-wrap items-center gap-4 font-mono text-[0.66rem] text-muted">
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-brand" />correlated</span>
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 border-t border-dashed border-muted" />if independent</span>
+              </p>
             </div>
 
-            <div>
-              <SectionHeading eyebrow="The compounding" title="Correlation" intro="Edit a cell to change how two risks move together, the assessment re-runs." />
-              {data.composite?.correlation_matrix && (
-                <Card className="mt-5 p-5">
-                  <CorrelationMatrix
-                    keys={data.composite.correlation_matrix.keys}
-                    labels={data.composite.correlation_matrix.labels}
-                    matrix={data.composite.correlation_matrix.matrix}
-                    onChange={onCorrelationChange}
-                  />
-                  {data.composite.correlation_matrix.psd_adjusted && (
-                    <p className="mt-3 font-mono text-[0.66rem] text-ochre">
-                      Matrix was projected to the nearest valid (positive-semi-definite) correlation structure.
-                    </p>
-                  )}
-                </Card>
-              )}
-              {data.composite?.top_pairs && (
-                <Card className="mt-4 p-5">
-                  <Eyebrow>Top compounding pairs</Eyebrow>
-                  <div className="mt-3 space-y-2.5">
-                    {data.composite.top_pairs.slice(0, 4).map((p, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="text-ink/80">
-                          {p.a_label} <span className="text-muted">×</span> {p.b_label}
-                        </span>
-                        <span className="font-mono tabular-nums text-muted">
-                          ρ {p.rho.toFixed(2)} · {pct(p.share)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-            </div>
+            <FragilityPanel r={rob} loading={loadingRob} eps={eps} onEps={onEps} />
           </div>
 
-          {/* Interpretation + recommendations */}
+          <div className="grid gap-8 lg:grid-cols-2">
+            <Tornado rows={data.sensitivity} />
+            <Contributions data={data} />
+          </div>
+
           <div className="grid gap-8 lg:grid-cols-2">
             <div>
-              <SectionHeading eyebrow="The read" title="What this means" />
-              <div className="mt-5">
-                <InterpretationPanel text={data.interpretation} />
-              </div>
+              <Eyebrow>The read</Eyebrow>
+              <h2 className="mt-1 font-display text-xl font-bold text-ink">What this means</h2>
+              <div className="mt-4"><InterpretationPanel text={data.interpretation} /></div>
             </div>
             <div>
-              <SectionHeading eyebrow="Action" title="Ranked recommendations" intro="Each carries a dollar impact and its tail, never a bare 'you should'." />
-              <div className="mt-5 space-y-3">
-                {data.recommendations.map((r) => (
-                  <Card key={r.rank} className="p-4">
+              <Eyebrow>Action</Eyebrow>
+              <h2 className="mt-1 font-display text-xl font-bold text-ink">Ranked by tail exposure</h2>
+              <div className="mt-4 space-y-3">
+                {data.recommendations.slice(0, 4).map((r) => (
+                  <div key={r.rank} className="rounded-xl border border-rule bg-surface p-4 shadow-card">
                     <div className="flex items-start gap-3">
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bordeaux/10 font-mono text-xs font-semibold text-bordeaux">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/10 font-mono text-xs font-semibold text-brand">
                         {r.rank}
                       </span>
-                      <div className="flex-1">
+                      <div className="min-w-0">
                         <div className="font-medium text-ink">{r.title}</div>
-                        <p className="mt-1 text-xs text-muted">{r.rationale}</p>
-                        <div className="mt-2 font-mono text-[0.68rem] tabular-nums text-bordeaux">
-                          {money(r.impact_expected)} expected
-                          {r.impact_tail ? ` · up to ${money(r.impact_tail)} at P95` : ""}
+                        <p className="mt-1 text-xs leading-relaxed text-muted">{r.rationale}</p>
+                        <div className="mt-2 font-mono text-[0.68rem] tabular-nums text-brand">
+                          {money(r.expected_annual_exposure)} expected · up to {money(r.tail_exposure_p95)} at P95
                         </div>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Delivery */}
-          <DeliveryView data={data} />
+          <ModelConfiguration data={data} />
         </div>
       )}
     </div>
   );
 }
 
-function DeliveryView({ data }: { data: AssessResponse }) {
-  const d = data.delivery;
+function Tornado({ rows }: { rows: Assessment["sensitivity"] }) {
+  const top = rows.slice(0, 8);
+  const max = top[0]?.impact || 1;
   return (
-    <Card className="p-6 sm:p-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Eyebrow>Deliverable · {d.format.replace(/_/g, " ")}</Eyebrow>
-          <h3 className="mt-1 font-display text-2xl font-semibold text-ink">{d.title}</h3>
-        </div>
-        <div className="flex gap-2">
-          {Object.entries(d.export).map(([k, v]) => (
-            <span
-              key={k}
-              className="inline-flex items-center gap-1.5 rounded-md border border-mist px-2.5 py-1 font-mono text-[0.66rem] text-muted"
-              title={v.available ? "Available" : `${v.tier} tier`}
-            >
-              {k.replace(/_/g, " ")} {v.available ? "✓" : `· ${v.tier}`}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {d.headline && <p className="mt-4 font-display text-lg text-bordeaux">{d.headline}</p>}
-
-      <div className="mt-5 grid gap-3 sm:grid-cols-4">
-        {d.key_numbers.map((k) => (
-          <div key={k.label} className="rounded-lg border border-mist bg-paper p-3">
-            <div className="font-mono text-[0.6rem] uppercase tracking-wide text-muted">{k.label}</div>
-            <div className="mt-1 font-display text-xl font-semibold tabular-nums text-ink">{k.value}</div>
+    <div className="rounded-2xl border border-rule bg-surface p-6 shadow-card">
+      <Eyebrow>Sensitivity</Eyebrow>
+      <h2 className="mt-1 font-display text-xl font-bold text-ink">Which assumption moves the answer</h2>
+      <p className="mt-2 text-sm text-muted">
+        Each parameter shifted 25% in both directions. Longer bar, more your answer depends on that
+        judgment being right.
+      </p>
+      <div className="mt-5 space-y-2.5">
+        {top.map((r) => (
+          <div key={`${r.engine}-${r.parameter}`}>
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="truncate text-ink/85">{r.parameter_label}</span>
+              <span className="shrink-0 font-mono text-xs tabular-nums text-muted">{moneyCompact(r.impact)}</span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-rule">
+              <div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(3, (r.impact / max) * 100)}%` }} />
+            </div>
           </div>
         ))}
       </div>
+      <p className="mt-4 border-t border-rule pt-3 font-mono text-[0.62rem] text-muted">
+        Movement in portfolio P95, USD
+      </p>
+    </div>
+  );
+}
 
-      {d.view !== "list" && (
-        <p className="mt-5 whitespace-pre-line leading-relaxed text-ink/90">{d.interpretation}</p>
-      )}
+function Contributions({ data }: { data: Assessment }) {
+  return (
+    <div className="rounded-2xl border border-rule bg-surface p-6 shadow-card">
+      <Eyebrow>By domain</Eyebrow>
+      <h2 className="mt-1 font-display text-xl font-bold text-ink">Who owns the tail</h2>
+      <p className="mt-2 text-sm text-muted">
+        Share of a typical year against share of the P95 tail. A domain that grows between the two is
+        one that shows up precisely when things are already going badly.
+      </p>
+      <div className="mt-5 space-y-3">
+        {data.domain_contributions.map((d) => {
+          const grew = d.tail_share > d.base_share;
+          return (
+            <div key={d.domain}>
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <Link href={`/analyze/${d.domain}`} className="truncate text-ink/85 hover:text-brand">
+                  {d.label}
+                </Link>
+                <span className="shrink-0 font-mono text-xs tabular-nums text-muted">
+                  {pct(d.base_share)} <span className="text-muted/60">→</span>{" "}
+                  <span className={grew ? "text-amber" : "text-ink"}>{pct(d.tail_share)}</span>
+                </span>
+              </div>
+              <div className="mt-1 flex gap-1">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-rule">
+                  <div className="h-full rounded-full bg-muted/50" style={{ width: `${d.base_share * 100}%` }} />
+                </div>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-rule">
+                  <div className={`h-full rounded-full ${grew ? "bg-amber" : "bg-brand"}`} style={{ width: `${d.tail_share * 100}%` }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-4 border-t border-rule pt-3 font-mono text-[0.62rem] text-muted">
+        left: share of expected loss · right: share of the P95 tail
+      </p>
+    </div>
+  );
+}
 
-      <div className="mt-5 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-mist text-left font-mono text-[0.66rem] uppercase tracking-wide text-muted">
-              <th className="pb-2">Domain</th>
-              <th className="pb-2 text-right">Expected</th>
-              <th className="pb-2 text-right">Tail · P95</th>
-            </tr>
-          </thead>
-          <tbody className="tnum">
-            {d.domain_table.map((row) => (
-              <tr key={row.domain} className="border-b border-mist/60">
-                <td className="py-2 text-ink">{row.domain}</td>
-                <td className="py-2 text-right font-mono text-ink/80">{row.expected}</td>
-                <td className="py-2 text-right font-mono text-ochre">{row.tail_p95}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+function ModelConfiguration({ data }: { data: Assessment }) {
+  const [copied, setCopied] = useState(false);
+  const cfg = {
+    model: data.model,
+    version: data.version,
+    seed: data.seed,
+    n_sims: data.n_sims,
+    method: data.method,
+    copula: data.assumptions.copula,
+    correlation_matrix: data.assumptions.correlation_matrix,
+    domains: data.assumptions.domains,
+    intake_adjustments: data.intake_adjustments,
+  };
+  const copy = () => {
+    navigator.clipboard?.writeText(JSON.stringify(cfg, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+  const m = data.assumptions.correlation_matrix;
+
+  return (
+    <div className="rounded-2xl border border-rule bg-surface p-6 shadow-card">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="eyebrow">Model configuration</div>
+          <h2 className="mt-1 font-display text-xl font-bold text-ink">Everything needed to reproduce this run</h2>
+        </div>
+        <button
+          onClick={copy}
+          className="rounded-lg border border-rule px-3 py-1.5 font-mono text-xs text-muted transition-colors hover:border-brand hover:text-brand"
+        >
+          {copied ? "copied" : "copy config"}
+        </button>
       </div>
 
-      <p className="mt-5 border-t border-mist pt-4 font-mono text-[0.66rem] text-muted">{d.disclaimer}</p>
-    </Card>
+      <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_1fr]">
+        <pre className="overflow-x-auto rounded-xl border border-rule bg-raised p-4 font-mono text-xs leading-relaxed">
+          {[
+            ["model", data.model],
+            ["version", data.version],
+            ["seed", String(data.seed)],
+            ["n_sims", data.n_sims.toLocaleString("en-US")],
+            ["copula", `${data.assumptions.copula.family}, df=${data.assumptions.copula.df}`],
+            ["applied_to", data.assumptions.copula.applied_to],
+            ["matrix_repaired", String(m.repaired)],
+          ].map(([k, v]) => (
+            <div key={k}>
+              <span className="text-muted">{k}</span>
+              <span className="text-muted/50">: </span>
+              <span className="text-brand">{v}</span>
+            </div>
+          ))}
+        </pre>
+
+        <div>
+          <div className="eyebrow">Correlation matrix</div>
+          <div className="mt-2 overflow-x-auto">
+            <table className="border-separate border-spacing-0.5">
+              <tbody>
+                {m.matrix.map((row, i) => (
+                  <tr key={i}>
+                    <td className="pr-2 text-right font-mono text-[0.58rem] text-muted">
+                      {m.labels[i]?.split(" ")[0]}
+                    </td>
+                    {row.map((v, j) => (
+                      <td key={j}>
+                        <div
+                          title={`${m.labels[i]} x ${m.labels[j]}: ${v.toFixed(2)}`}
+                          className="flex h-7 w-9 items-center justify-center rounded font-mono text-[0.6rem] tabular-nums"
+                          style={{
+                            background:
+                              i === j
+                                ? "rgb(var(--brand-deep))"
+                                : `rgb(var(--brand) / ${0.06 + Math.max(0, v) * 0.6})`,
+                            color: i === j || v > 0.55 ? "#fff" : "rgb(var(--ink))",
+                          }}
+                        >
+                          {v.toFixed(2)}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-5 border-t border-rule pt-4 text-xs leading-relaxed text-muted">
+        {data.assumptions.parameter_basis}
+      </p>
+    </div>
   );
 }

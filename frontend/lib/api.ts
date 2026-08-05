@@ -1,5 +1,13 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -20,106 +28,200 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export class ApiError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-  }
-}
+// ---- endpoints ----
+export const getHealth = () => req<Health>("/");
+export const getIndustries = () => req<{ industries: Industry[] }>("/industries");
+export const getModels = () => req<ModelsResponse>("/models");
 
-// ---- Endpoints ----
+export const assess = (body: AssessRequest) =>
+  req<Assessment>("/assess", { method: "POST", body: JSON.stringify(body) });
 
-export function getHealth() {
-  return req<HealthResponse>("/");
-}
+export const assessRobustness = (body: AssessRequest & { eps?: number }) =>
+  req<RobustnessResponse>("/assess/robustness", { method: "POST", body: JSON.stringify(body) });
 
-export function getModels() {
-  return req<{ models: ModelSpec[] }>("/models");
-}
+export const analyze = (body: { description?: string; risk_type?: string; params?: Record<string, unknown> }) =>
+  req<AnalyzeResponse>("/analyze", { method: "POST", body: JSON.stringify(body) });
 
-export function getTemplates() {
-  return req<TemplatesResponse>("/templates");
-}
-
-export function analyze(payload: {
-  description?: string;
-  risk_type?: string;
-  params?: Record<string, unknown>;
-}) {
-  return req<AnalyzeResponse>("/analyze", { method: "POST", body: JSON.stringify(payload) });
-}
-
-export function assess(payload: {
-  description?: string;
-  domains?: string[];
-  params_by_domain?: Record<string, Record<string, unknown>>;
-  correlation_overrides?: Record<string, number>;
-  output_format?: string;
-}) {
-  return req<AssessResponse>("/assess", { method: "POST", body: JSON.stringify(payload) });
-}
-
-export function getDocumentChecklist() {
-  return req<DocumentsResponse>("/documents/checklist");
-}
-
-export async function uploadDocuments(files: File[]): Promise<DocumentsResponse> {
-  const fd = new FormData();
-  files.forEach((f) => fd.append("files", f));
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}/documents`, { method: "POST", body: fd });
-  } catch {
-    throw new ApiError(`Can't reach the analysis engine at ${API_URL}.`, 0);
-  }
-  if (!res.ok) throw new ApiError(`Upload failed (${res.status}).`, res.status);
-  return res.json();
-}
-
-// ---- Types ----
-
-export interface HealthResponse {
+// ---- types ----
+export interface Health {
   status: string;
   ai_enabled: boolean;
   features: Record<string, boolean>;
   scaffolds: Record<string, boolean>;
-  model_count: number;
-  output_formats: string[];
+  industries: number;
+  engines: number;
+  n_sims: number;
+  n_sims_sweep: number;
 }
 
-export interface ParamSpec {
-  name: string;
+export interface Question {
+  id: string;
   label: string;
-  type: string;
-  default: unknown;
+  type: "currency" | "percent" | "int" | "number" | "choice" | "text";
+  default: any;
   unit?: string | null;
   help?: string | null;
-  advanced?: boolean;
-  min?: number | null;
-  max?: number | null;
-  step?: number | null;
-  fields?: { name: string; label: string; type: string }[] | null;
   choices?: string[] | null;
+  targets: string[];
+  rule?: string | null;
+  context_only: boolean;
 }
 
-export interface OutputSpec {
-  key: string;
-  label: string;
-  type: string;
-}
-
-export interface ModelSpec {
-  key: string;
+export interface Industry {
+  id: string;
   name: string;
-  version: string;
+  tagline: string;
+  reference_revenue: number;
+  engines: { engine: string; label: string; description: string; lef: number[]; magnitude: number[] }[];
+  questions: Question[];
+  correlation: { baseline: number; pairs: { a: string; b: string; rho: number }[] };
+  vocabulary: Record<string, string>;
+}
+
+export interface AssessRequest {
+  industry: string;
+  answers?: Record<string, any>;
+  correlation_overrides?: Record<string, number>;
+  alpha?: number;
+  seed?: number;
+}
+
+export interface DomainContribution {
   domain: string;
-  method: string;
+  label: string;
+  base_share: number;
+  tail_share: number;
+  expected_annual_loss: number;
+}
+
+export interface SensitivityRow {
+  engine: string;
+  label: string;
+  parameter: string;
+  parameter_label: string;
+  base_p95: number;
+  low_p95: number;
+  high_p95: number;
+  low_delta: number;
+  high_delta: number;
+  impact: number;
+  impact_pct: number;
+}
+
+export interface IntakeAdjustment {
+  question: string;
+  label: string;
+  answer: any;
+  default: any;
+  rule: string;
+  rule_description: string;
+  engines: string[];
+  frequency_multiplier: number;
+  magnitude_multiplier: number;
+}
+
+export interface Assessment {
+  industry: string;
+  industry_name: string;
+  model: string;
+  version: string;
   seed: number;
-  runnable: boolean;
-  docstring: string;
-  parameters: ParamSpec[];
-  outputs: OutputSpec[];
+  method: string;
+  n_sims: number;
+  expected_annual_loss: number;
+  expected_annual_loss_closed_form: number;
+  expected_annual_loss_independent: number;
+  expected_annual_loss_pct_revenue: number | null;
+  exceedance_curve: { percentile: number; loss: number }[];
+  exceedance_curve_independent: { percentile: number; loss: number }[];
+  correlation_premium: { p95: number; p99: number };
+  joint_breach: {
+    breach_percentile: number;
+    two_plus: number;
+    three_plus: number;
+    two_plus_independent: number;
+    three_plus_independent: number;
+  };
+  domain_contributions: DomainContribution[];
+  sensitivity: SensitivityRow[];
+  intake_adjustments: IntakeAdjustment[];
+  interpretation: string;
+  recommendations: {
+    rank: number;
+    engine: string;
+    domain_label: string;
+    title: string;
+    expected_annual_exposure: number;
+    tail_exposure_p95: number;
+    tail_share: number;
+    rationale: string;
+  }[];
+  vocabulary: Record<string, string>;
+  assumptions: {
+    domains: any[];
+    correlation_matrix: { keys: string[]; labels: string[]; matrix: number[][]; repaired: boolean };
+    copula: { family: string; df: number; applied_to: string };
+    n_sims: number;
+    seed: number;
+    parameter_basis: string;
+    annual_revenue?: number;
+    intake_adjustments?: IntakeAdjustment[];
+    [k: string]: any;
+  };
+}
+
+export interface FragilityRow {
+  pair: string[];
+  labels: string[];
+  rho: number;
+  is_default: boolean;
+  p99_swing: number;
+}
+
+export interface RobustnessResponse {
+  industry: string;
+  industry_name: string;
+  robustness: {
+    eps: number;
+    n_draws: number;
+    n_sims: number;
+    p99_point: number;
+    p99_low: number;
+    p99_high: number;
+    p99_spread_pct: number;
+    worst_case_vs_point: number;
+    p95_point: number;
+    p95_low: number;
+    p95_high: number;
+    method: string;
+  };
+  dependence_fragility: FragilityRow[];
+  eps_levels: Record<string, number>;
+  reading: string;
+}
+
+export interface ModelsResponse {
+  engines: {
+    key: string;
+    name: string;
+    domain: string;
+    version: string;
+    method: string;
+    description: string;
+    modulators: string[];
+    parameters: { name: string; label: string; type: string; unit: string }[];
+    basis: string;
+  }[];
+  decision_models: any[];
+  modulation_rules: { rule: string; description: string }[];
+  settings: {
+    n_sims: number;
+    n_sims_sweep: number;
+    seed: number;
+    copula: { family: string; df: number; applied_to: string };
+    eps_levels: Record<string, number>;
+  };
+  parameter_basis: string;
 }
 
 export interface AnalyzeResponse {
@@ -127,123 +229,4 @@ export interface AnalyzeResponse {
   model_output: Record<string, any>;
   interpretation: string;
   trace: { model: string; model_key: string; version: string; seed: number; n_sims?: number };
-}
-
-export interface RiskSummary {
-  expected_loss: number;
-  p95_loss: number;
-  std?: number;
-  prob_zero_loss?: number;
-  quantiles?: Record<string, number>;
-  label: string;
-}
-
-export interface DomainResult {
-  key: string;
-  name: string;
-  domain: string;
-  output: Record<string, any>;
-  trace: { model_key: string; version: string; seed: number; n_sims?: number };
-}
-
-export interface Composite {
-  model: string;
-  domains: string[];
-  expected_total_loss: number;
-  independent_p95: number;
-  correlated_p95: number;
-  naive_sum_p95: number;
-  amplification_pct: number;
-  correlated_p99: number;
-  headline: string;
-  top_pairs: {
-    a: string; b: string; a_label: string; b_label: string; rho: number;
-    contribution: number; share: number;
-  }[];
-  correlation_matrix: {
-    keys: string[]; labels: string[]; matrix: number[][]; psd_adjusted: boolean;
-  };
-  insufficient_domains?: boolean;
-}
-
-export interface Recommendation {
-  rank: number;
-  title: string;
-  domain: string;
-  domain_name: string;
-  rationale: string;
-  impact_expected: number | null;
-  impact_tail: number | null;
-}
-
-export interface Delivery {
-  format: string;
-  view: string;
-  title: string;
-  headline: string | null;
-  key_numbers: { label: string; value: string }[];
-  interpretation: string;
-  domain_table: { domain: string; expected: string; tail_p95: string }[];
-  recommendations: { rank: number; title: string; domain: string; impact: string; rationale: string }[];
-  disclaimer: string;
-  export: Record<string, { available: boolean; tier: string }>;
-}
-
-export interface AssessResponse {
-  domains: string[];
-  results: Record<string, DomainResult>;
-  ranked: DomainResult[];
-  composite: Composite | null;
-  intake: { domains: string[]; source: string };
-  interpretation: string;
-  recommendations: Recommendation[];
-  delivery: Delivery;
-}
-
-export interface ChecklistItem {
-  id: string;
-  name: string;
-  description: string;
-  unlocks: string[];
-  required: boolean;
-  present: boolean;
-  status: "present" | "missing" | "optional";
-  impact: string | null;
-}
-
-export interface DocumentsResponse {
-  documents?: {
-    filename: string;
-    doc_type: string;
-    confidence: number;
-    extraction: string;
-    fields: Record<string, any>;
-    note?: string | null;
-    chars?: number;
-  }[];
-  checklist: ChecklistItem[];
-  coverage: { required_total: number; required_present: number; pct: number; missing_required: string[] };
-  extracted_params?: Record<string, Record<string, unknown>>;
-  signals?: {
-    signals: { type: string; severity: string; subject: string; message: string; simulated: boolean }[];
-    disclaimer: string;
-  };
-  required_docs?: unknown[];
-  ai_enabled?: boolean;
-}
-
-export interface TemplatesResponse {
-  templates: {
-    model_key: string;
-    name: string;
-    version: string;
-    runnable: boolean;
-    status: string;
-    authored_by: string;
-    validated_on: string | null;
-    backtests: number | null;
-    accuracy: Record<string, number> | null;
-  }[];
-  authoring_pipeline_enabled: boolean;
-  note: string;
 }

@@ -4,7 +4,6 @@ import { uploadDocuments, type DocumentsResponse } from "@/lib/api";
 import { titleCase } from "@/lib/format";
 import { Badge, Button, Card, Eyebrow } from "@/components/ui";
 import { ErrorPanel, LoadingPanel } from "@/components/StatePanels";
-import { DottedWaves } from "@/components/DottedWaves";
 
 export default function UploadPage() {
   const [result, setResult] = useState<DocumentsResponse | null>(null);
@@ -29,7 +28,6 @@ export default function UploadPage() {
 
   return (
     <div className="relative overflow-hidden">
-      <DottedWaves corner="tr" className="pointer-events-none absolute -right-16 -top-8 h-72 w-72" opacity={0.3} />
       <div className="container-x relative py-12">
       <div className="max-w-2xl">
         <Eyebrow>Documents · the front door</Eyebrow>
@@ -56,7 +54,7 @@ export default function UploadPage() {
           handle(e.dataTransfer.files);
         }}
         className={`mt-8 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
-          dragging ? "border-bordeaux bg-bordeaux/[0.04]" : "border-mist-deep bg-surface"
+          dragging ? "border-brand bg-brand/[0.04]" : "border-rule bg-surface"
         }`}
       >
         <p className="font-display text-lg text-ink">Drag documents here</p>
@@ -103,15 +101,15 @@ function Results({ result }: { result: DocumentsResponse }) {
           {result.checklist.map((c) => (
             <div
               key={c.id}
-              className="flex items-start gap-3 rounded-lg border border-mist bg-surface p-3.5"
+              className="flex items-start gap-3 rounded-lg border border-rule bg-surface p-3.5"
             >
               <span
                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.7rem] ${
                   c.present
-                    ? "bg-bordeaux text-white"
+                    ? "bg-brand text-white"
                     : c.status === "missing"
-                    ? "bg-ochre/15 text-ochre"
-                    : "bg-mist text-muted"
+                    ? "bg-amber/15 text-amber"
+                    : "bg-rule text-muted"
                 }`}
               >
                 {c.present ? "✓" : c.status === "missing" ? "!" : "·"}
@@ -128,7 +126,7 @@ function Results({ result }: { result: DocumentsResponse }) {
           ))}
         </div>
         <div className="mt-5">
-          <Button href="/dashboard?run=1">Continue to the assessment →</Button>
+          <Button href="/start">Continue to industry selection →</Button>
         </div>
       </div>
 
@@ -138,7 +136,7 @@ function Results({ result }: { result: DocumentsResponse }) {
           <Eyebrow>Extracted documents</Eyebrow>
           <div className="mt-3 space-y-3">
             {(result.documents || []).map((d, i) => (
-              <div key={i} className="border-b border-mist pb-3 last:border-0">
+              <div key={i} className="border-b border-rule pb-3 last:border-0">
                 <div className="flex items-center justify-between">
                   <span className="truncate text-sm font-medium text-ink">{d.filename}</span>
                   <Badge tone={d.extraction === "ai" ? "bordeaux" : "muted"}>
@@ -155,7 +153,7 @@ function Results({ result }: { result: DocumentsResponse }) {
                       </span>
                     ))}
                 </div>
-                {d.note && <p className="mt-1 text-[0.68rem] text-ochre">{d.note}</p>}
+                {d.note && <p className="mt-1 text-[0.68rem] text-amber">{d.note}</p>}
               </div>
             ))}
           </div>
@@ -166,7 +164,7 @@ function Results({ result }: { result: DocumentsResponse }) {
             <Eyebrow>Signals</Eyebrow>
             <div className="mt-3 space-y-2">
               {result.signals.signals.map((s, i) => (
-                <div key={i} className="flex items-start gap-2 rounded-lg bg-paper p-2.5">
+                <div key={i} className="flex items-start gap-2 rounded-lg bg-raised p-2.5">
                   <Badge tone={s.severity === "critical" ? "ochre" : "muted"}>{s.type}</Badge>
                   <p className="text-xs text-ink/80">{s.message}</p>
                 </div>

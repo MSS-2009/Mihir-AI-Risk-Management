@@ -12,7 +12,7 @@ export function Card({
   as?: any;
 }) {
   return (
-    <Tag className={`rounded-2xl border border-mist bg-surface shadow-card ${className}`}>{children}</Tag>
+    <Tag className={`rounded-2xl border border-rule bg-surface shadow-card ${className}`}>{children}</Tag>
   );
 }
 
@@ -40,9 +40,9 @@ export function Button({
   const base =
     "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
   const styles = {
-    primary: "bg-bordeaux text-white hover:bg-bordeaux-deep",
-    outline: "border border-mist-deep bg-surface text-ink hover:border-bordeaux hover:text-bordeaux",
-    ghost: "text-ink/70 hover:bg-bordeaux/8 hover:text-bordeaux",
+    primary: "bg-brand text-white hover:bg-brand-deep",
+    outline: "border border-rule bg-surface text-ink hover:border-brand hover:text-brand",
+    ghost: "text-ink/70 hover:bg-brand/10 hover:text-brand",
   }[variant];
   const cls = `${base} ${styles} ${className}`;
   if (href)
@@ -66,10 +66,10 @@ export function Badge({
   tone?: "neutral" | "bordeaux" | "ochre" | "muted";
 }) {
   const styles = {
-    neutral: "border-mist-deep bg-paper text-ink/70",
-    bordeaux: "border-bordeaux/20 bg-bordeaux/8 text-bordeaux",
-    ochre: "border-ochre/25 bg-ochre/10 text-ochre",
-    muted: "border-mist bg-paper text-muted",
+    neutral: "border-rule bg-raised text-ink/70",
+    bordeaux: "border-brand/20 bg-brand/10 text-brand",
+    ochre: "border-amber/25 bg-amber/10 text-amber",
+    muted: "border-rule bg-raised text-muted",
   }[tone];
   return (
     <span
@@ -83,9 +83,9 @@ export function Badge({
 /** A thin horizontal risk meter, the one place we translate magnitude to length. */
 export function RiskBar({ value, max, tone = "bordeaux" }: { value: number; max: number; tone?: "bordeaux" | "ochre" }) {
   const w = max > 0 ? Math.min(100, Math.max(2, (value / max) * 100)) : 0;
-  const color = tone === "ochre" ? "bg-ochre" : "bg-bordeaux";
+  const color = tone === "ochre" ? "bg-amber" : "bg-brand";
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-mist" aria-hidden>
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-rule" aria-hidden>
       <div className={`h-full rounded-full ${color}`} style={{ width: `${w}%` }} />
     </div>
   );
@@ -103,7 +103,7 @@ export function SectionHeading({
   intro?: string;
 }) {
   const segments = accent
-    ? [{ text: title, className: "text-ink" }, { text: accent, className: "text-bordeaux" }]
+    ? [{ text: title, className: "text-ink" }, { text: accent, className: "text-brand" }]
     : [{ text: title, className: "text-ink" }];
   return (
     <div className="max-w-2xl">
@@ -113,7 +113,7 @@ export function SectionHeading({
         as="h2"
         className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl"
       />
-      <span className="mt-3 block h-[3px] w-12 rounded-full bg-bordeaux" />
+      <span className="mt-3 block h-[3px] w-12 rounded-full bg-brand" />
       {intro && (
         <ScrollReveal as="p" className="mt-4 text-muted" delay={80}>
           {intro}

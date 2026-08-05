@@ -13,8 +13,8 @@ export function LoadingPanel({
     <Card className="p-8">
       <div className="flex items-center gap-3">
         <span className="relative flex h-2.5 w-2.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-bordeaux/50" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-bordeaux" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand/50" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand" />
         </span>
         <span className="font-medium text-ink">{title}…</span>
       </div>
@@ -24,10 +24,10 @@ export function LoadingPanel({
           (s, i) => (
             <div key={s} className="flex items-center gap-2 text-sm text-muted">
               <span
-                className="h-1 w-8 overflow-hidden rounded-full bg-mist"
+                className="h-1 w-8 overflow-hidden rounded-full bg-rule"
                 style={{ animationDelay: `${i * 150}ms` }}
               >
-                <span className="block h-full w-full animate-fade-up bg-bordeaux/40" />
+                <span className="block h-full w-full animate-fade-up bg-brand/40" />
               </span>
               {s}
             </div>
@@ -41,8 +41,8 @@ export function LoadingPanel({
 /** Error, say what happened and how to fix it. Never vague. */
 export function ErrorPanel({ error, onRetry }: { error: string; onRetry?: () => void }) {
   return (
-    <Card className="border-ochre/30 p-6">
-      <div className="font-mono text-[0.7rem] uppercase tracking-wide text-ochre">Something interrupted the run</div>
+    <Card className="border-amber/30 p-6">
+      <div className="font-mono text-[0.7rem] uppercase tracking-wide text-amber">Something interrupted the run</div>
       <p className="mt-2 text-sm text-ink">{error}</p>
       {onRetry && (
         <div className="mt-4">

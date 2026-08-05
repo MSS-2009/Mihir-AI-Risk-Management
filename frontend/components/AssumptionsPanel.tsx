@@ -59,10 +59,10 @@ export function AssumptionsPanel({
       <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">{primary.map(render)}</div>
 
       {advanced.length > 0 && (
-        <div className="mt-5 border-t border-mist pt-4">
+        <div className="mt-5 border-t border-rule pt-4">
           <button
             onClick={() => setShowAdvanced((s) => !s)}
-            className="font-mono text-[0.7rem] uppercase tracking-wide text-muted hover:text-bordeaux"
+            className="font-mono text-[0.7rem] uppercase tracking-wide text-muted hover:text-brand"
             aria-expanded={showAdvanced}
           >
             {showAdvanced ? "− Hide" : "+ Show"} advanced assumptions ({advanced.length})

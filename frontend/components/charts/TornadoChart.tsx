@@ -24,12 +24,12 @@ export function TornadoChart({
           <div key={r.label} className="grid grid-cols-[1fr_2fr] items-center gap-3">
             <div className="truncate text-right text-xs text-muted">{r.label}</div>
             <div className="relative flex h-5 items-center">
-              <div className="absolute left-1/2 top-0 h-full w-px bg-mist-deep" />
+              <div className="absolute left-1/2 top-0 h-full w-px bg-rule" />
               <div className="flex w-1/2 justify-end">
-                <div className="h-3.5 rounded-l bg-ochre/70" style={{ width: `${lw}%` }} title={`${unit}${r.low}`} />
+                <div className="h-3.5 rounded-l bg-amber/70" style={{ width: `${lw}%` }} title={`${unit}${r.low}`} />
               </div>
               <div className="flex w-1/2 justify-start">
-                <div className="h-3.5 rounded-r bg-bordeaux/70" style={{ width: `${hw}%` }} title={`${unit}${r.high}`} />
+                <div className="h-3.5 rounded-r bg-brand/70" style={{ width: `${hw}%` }} title={`${unit}${r.high}`} />
               </div>
             </div>
           </div>

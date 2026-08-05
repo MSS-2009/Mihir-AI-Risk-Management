@@ -74,8 +74,8 @@ export function CorrelationMatrix({
                         onClick={() => setSel([i, j])}
                         aria-label={`Correlation ${labels[i]} and ${labels[j]}: ${rho.toFixed(2)}`}
                         className={`flex h-9 w-11 items-center justify-center rounded font-mono text-[0.66rem] tabular-nums transition ${
-                          isDiag ? "cursor-default opacity-70" : "cursor-pointer hover:ring-2 hover:ring-bordeaux/40"
-                        } ${selected ? "ring-2 ring-bordeaux" : ""}`}
+                          isDiag ? "cursor-default opacity-70" : "cursor-pointer hover:ring-2 hover:ring-brand/40"
+                        } ${selected ? "ring-2 ring-brand" : ""}`}
                         style={cellStyle(rho)}
                       >
                         {rho.toFixed(2)}
@@ -90,12 +90,12 @@ export function CorrelationMatrix({
       </div>
 
       {sel && sel[0] !== sel[1] && (
-        <div className="mt-4 rounded-lg border border-mist bg-paper p-4">
+        <div className="mt-4 rounded-lg border border-rule bg-raised p-4">
           <div className="flex items-center justify-between text-sm">
             <span className="text-ink">
               {labels[sel[0]]} <span className="text-muted">×</span> {labels[sel[1]]}
             </span>
-            <span className="font-mono tabular-nums text-bordeaux">{rhoAt(sel[0], sel[1]).toFixed(2)}</span>
+            <span className="font-mono tabular-nums text-brand">{rhoAt(sel[0], sel[1]).toFixed(2)}</span>
           </div>
           <input
             type="range"
@@ -104,7 +104,7 @@ export function CorrelationMatrix({
             step={0.05}
             value={rhoAt(sel[0], sel[1])}
             onChange={(e) => setRho(sel[0], sel[1], parseFloat(e.target.value))}
-            className="mt-3 w-full accent-bordeaux"
+            className="mt-3 w-full accent-brand"
             aria-label="Adjust correlation"
           />
           <p className="mt-2 font-mono text-[0.66rem] text-muted">

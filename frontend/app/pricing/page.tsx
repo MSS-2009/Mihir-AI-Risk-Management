@@ -6,10 +6,12 @@ import { Badge, Button, Eyebrow } from "@/components/ui";
 type Row = { label: string; free: boolean | string; growth: boolean | string; cont: boolean | string };
 
 const ROWS: Row[] = [
-  { label: "Manual & questionnaire input", free: true, growth: true, cont: true },
+  { label: "Industry selection and guided intake", free: true, growth: true, cont: true },
   { label: "Document upload & extraction", free: true, growth: true, cont: true },
-  { label: "All risk models + full simulations", free: true, growth: true, cont: true },
+  { label: "Every model for your industry, 50,000 scenarios", free: true, growth: true, cont: true },
   { label: "Composite correlation dashboard", free: true, growth: true, cont: true },
+  { label: "Robustness band and dependence fragility", free: true, growth: true, cont: true },
+  { label: "Sensitivity tornado", free: true, growth: true, cont: true },
   { label: "AI interpretation & recommendations", free: true, growth: true, cont: true },
   { label: "Executive summary / one-pager / list", free: true, growth: true, cont: true },
   { label: "Saved history", free: false, growth: true, cont: true },
@@ -23,8 +25,8 @@ const ROWS: Row[] = [
 
 const TIERS = [
   { id: "free", name: "Free", price: "$0", note: "Everything you need to get a defensible number.", cta: "Start free", href: "/upload", highlight: false },
-  { id: "growth", name: "Growth", price: "$1K", per: "/mo", note: "History, benchmarking, scheduled pulls, exports.", cta: "Coming soon", href: "/dashboard", highlight: true },
-  { id: "cont", name: "Continuous", price: "$5K", per: "/mo", note: "Live connector, continuous re-sim, alerting.", cta: "Coming soon", href: "/dashboard", highlight: false },
+  { id: "growth", name: "Growth", price: "$1K", per: "/mo", note: "History, benchmarking, scheduled pulls, exports.", cta: "Coming soon", href: "/start", highlight: true },
+  { id: "cont", name: "Continuous", price: "$5K", per: "/mo", note: "Live connector, continuous re-sim, alerting.", cta: "Coming soon", href: "/start", highlight: false },
 ];
 
 export default function PricingPage() {
@@ -37,9 +39,9 @@ export default function PricingPage() {
     typeof v === "string" ? (
       <span className="text-sm text-ink">{v}</span>
     ) : v ? (
-      <span className="text-bordeaux">✓</span>
+      <span className="text-brand">✓</span>
     ) : (
-      <span className="text-mist-deep">-</span>
+      <span className="text-muted">-</span>
     );
 
   return (
@@ -50,7 +52,7 @@ export default function PricingPage() {
           Analyst-grade risk, at mid-market prices.
         </h1>
         <p className="mt-3 text-muted">
-          The free tier runs every model and the full composite, no account, no gate. Paid tiers add
+          The free tier runs every model for your industry, the full composite, and the robustness layer. No account, no gate. Paid tiers add
           persistence, live data, and continuous monitoring. We&apos;re honest about what&apos;s built
           today: everything below the line is scaffolded.
         </p>
@@ -61,7 +63,7 @@ export default function PricingPage() {
           <div
             key={t.id}
             className={`rounded-2xl border p-6 ${
-              t.highlight ? "border-bordeaux bg-bordeaux/[0.03] shadow-card" : "border-mist bg-surface"
+              t.highlight ? "border-brand bg-brand/[0.03] shadow-card" : "border-rule bg-surface"
             }`}
           >
             <div className="flex items-center justify-between">
@@ -86,7 +88,7 @@ export default function PricingPage() {
       <div className="mt-12 overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-mist-deep">
+            <tr className="border-b border-rule">
               <th className="py-3 font-mono text-[0.66rem] uppercase tracking-wide text-muted">Capability</th>
               <th className="py-3 text-center font-mono text-[0.66rem] uppercase tracking-wide text-muted">Free</th>
               <th className="py-3 text-center font-mono text-[0.66rem] uppercase tracking-wide text-muted">Growth</th>
@@ -95,7 +97,7 @@ export default function PricingPage() {
           </thead>
           <tbody>
             {ROWS.map((r) => (
-              <tr key={r.label} className="border-b border-mist/60">
+              <tr key={r.label} className="border-b border-rule/60">
                 <td className="py-2.5 text-sm text-ink/85">{r.label}</td>
                 <td className="py-2.5 text-center">{cell(r.free)}</td>
                 <td className="py-2.5 text-center">{cell(r.growth)}</td>

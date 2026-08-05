@@ -99,7 +99,7 @@ export function FloatTitle({
   className?: string;
 }) {
   const segments: Segment[] = [{ text: lead, className: "text-ink" }];
-  if (accent) segments.push({ text: accent, className: "text-bordeaux" });
+  if (accent) segments.push({ text: accent, className: "text-brand" });
   return <ScrollFloat segments={segments} as={as} className={className} />;
 }
 

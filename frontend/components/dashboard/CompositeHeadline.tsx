@@ -6,7 +6,7 @@ export function CompositeHeadline({ c }: { c: Composite }) {
   const max = Math.max(c.naive_sum_p95, c.correlated_p95, c.independent_p95);
   const bar = (v: number) => `${Math.max(4, (v / max) * 100)}%`;
   return (
-    <div className="rounded-2xl border border-bordeaux/20 bg-gradient-to-br from-bordeaux-deep to-bordeaux p-6 text-white sm:p-8">
+    <div className="rounded-2xl border border-brand/20 bg-gradient-to-br from-bordeaux-deep to-bordeaux p-6 text-white sm:p-8">
       <div className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-white/60">
         Composite risk · all domains
       </div>
