@@ -1,102 +1,90 @@
-"""Multi-domain assessment orchestration, powers /assess and the dashboard.
+"""Assessment orchestration: industry pack in, dashboard payload out.
 
-Pipeline (the agent nodes, run in sequence):
-    intake -> modeling -> correlation -> interpretation -> recommendation -> delivery
+Split deliberately into two calls:
 
-Modeling runs concurrently (CPU-bound numpy). Every step degrades gracefully
-without an API key. The single-domain LangGraph in graph.py stays as the /analyze
-spine; this orchestrator is the multi-domain path.
+  run_assessment   composite + sensitivity. Fast (~2.5s), blocks the dashboard.
+  run_robustness   the 4.10 dependence layer. ~5s, loaded after the dashboard
+                   paints rather than holding it hostage.
+
+The split is a measurement, not a guess: the composite is 90ms, but the
+robustness sweep needs ~90 sequential portfolio runs at the pinned sample size,
+and the fragility ranking is unstable at smaller samples.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from engines.composite import composite_risk_correlation
+from engines.constants import DEFAULT_SEED, N_SIMS
+from engines.modulation import apply_modulations
+from engines.robustness import DEFAULT_EPS, robustness_assessment
+from agents.portfolio import build_recommendations, portfolio_interpretation
+from engines.sensitivity import sensitivity
+from industries import get_pack
 
-from agents.delivery import build_delivery
-from agents.intake import extract_intent
-from agents.interpretation import portfolio_interpretation
-from agents.recommendation import build_recommendations
-from domains import DEFAULT_DOMAINS, LOSS_DOMAINS  # noqa: F401 (re-exported)
-from models import MODEL_REGISTRY, composite_risk_correlation, run, trace_for
-
-
-def _run_one(key: str, params: dict | None):
-    out = run(key, params)
-    return key, {
-        "key": key,
-        "name": MODEL_REGISTRY[key].name,
-        "domain": MODEL_REGISTRY[key].domain,
-        "output": out,
-        "trace": trace_for(key, out),
-    }
+REVENUE_QUESTION = "annual_revenue"
 
 
-def _model_and_correlate(domains, params_by_domain, correlation_overrides):
-    """The modeling + correlation core (shared, deterministic, no LLM)."""
-    domains = [d for d in domains if d in MODEL_REGISTRY and MODEL_REGISTRY[d].runnable]
-    params_by_domain = params_by_domain or {}
-
-    results: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=min(8, len(domains) or 1)) as ex:
-        futures = [ex.submit(_run_one, d, params_by_domain.get(d)) for d in domains]
-        for f in futures:
-            key, payload = f.result()
-            results[key] = payload
-
-    summaries = {
-        k: v["output"]["risk_summary"]
-        for k, v in results.items()
-        if "risk_summary" in v["output"]
-    }
-    composite = None
-    if len(summaries) >= 2:
-        composite = composite_risk_correlation(summaries, correlation_overrides=correlation_overrides)
-
-    ranked = sorted(
-        results.values(),
-        key=lambda r: r["output"].get("risk_summary", {}).get("p95_loss", 0),
-        reverse=True,
-    )
-    return {
-        "domains": [r["key"] for r in ranked],
-        "results": {r["key"]: r for r in ranked},
-        "ranked": ranked,
-        "composite": composite,
-    }
+def _prepare(industry: str, answers: dict | None, correlation_overrides: dict | None, alpha: float):
+    """Resolve a pack plus intake answers into marginals and a matrix."""
+    pack = get_pack(industry)
+    answers = answers or {}
+    revenue = answers.get(REVENUE_QUESTION) or pack.reference_revenue
+    marginals = pack.marginals(revenue=revenue, alpha=alpha)
+    marginals, trail = apply_modulations(marginals, answers, pack.questions)
+    corr, repaired = pack.matrix(correlation_overrides)
+    return pack, marginals, corr, repaired, trail, revenue
 
 
 def run_assessment(
-    domains: list[str] | None = None,
-    params_by_domain: dict | None = None,
+    industry: str,
+    answers: dict | None = None,
     correlation_overrides: dict | None = None,
-):
-    """Modeling + correlation only (used by tests and as the core of a full run)."""
-    return _model_and_correlate(domains or DEFAULT_DOMAINS, params_by_domain, correlation_overrides)
+    alpha: float = 1.0,
+    n_sims: int = N_SIMS,
+    seed: int = DEFAULT_SEED,
+    include_sensitivity: bool = True,
+    interpret: bool = True,
+) -> dict:
+    """Composite risk for one industry, plus the sensitivity tornado."""
+    pack, marginals, corr, repaired, trail, revenue = _prepare(
+        industry, answers, correlation_overrides, alpha
+    )
+    out = composite_risk_correlation(
+        marginals, corr, pack.id, n_sims=n_sims, seed=seed, matrix_repaired=repaired,
+        extra_assumptions={
+            "industry_name": pack.name,
+            "annual_revenue": revenue,
+            "reference_revenue": pack.reference_revenue,
+            "revenue_scaling_exponent": alpha,
+            "intake_adjustments": trail,
+        },
+    )
+    out["industry_name"] = pack.name
+    out["vocabulary"] = pack.vocabulary
+    out["expected_annual_loss_pct_revenue"] = (
+        round(out["expected_annual_loss"] / revenue, 5) if revenue else None
+    )
+    out["intake_adjustments"] = trail
+    if include_sensitivity:
+        out["sensitivity"] = sensitivity(marginals, corr, seed=seed)
+    if interpret:
+        out["interpretation"] = portfolio_interpretation(out)
+        out["recommendations"] = build_recommendations(out)
+    return out
 
 
-def run_full_assessment(
-    description: str = "",
-    domains: list[str] | None = None,
-    params_by_domain: dict | None = None,
+def run_robustness(
+    industry: str,
+    answers: dict | None = None,
     correlation_overrides: dict | None = None,
-    output_format: str = "executive_summary",
-):
-    """The complete pipeline: intake -> models -> composite -> interpretation ->
-    recommendations -> delivery. Powers /assess."""
-    intent = extract_intent(description, requested_domains=domains)
-    merged_params = dict(intent.get("params_by_domain") or {})
-    for k, v in (params_by_domain or {}).items():  # explicit params win
-        merged_params.setdefault(k, {})
-        merged_params[k].update(v)
-
-    core = _model_and_correlate(intent["domains"], merged_params, correlation_overrides)
-    interpretation = portfolio_interpretation(core)
-    recommendations = build_recommendations(core)
-    delivery = build_delivery(core, interpretation, recommendations, output_format)
-
-    return {
-        **core,
-        "intake": {"domains": intent["domains"], "source": intent.get("source")},
-        "interpretation": interpretation,
-        "recommendations": recommendations,
-        "delivery": delivery,
-    }
+    alpha: float = 1.0,
+    eps: float = DEFAULT_EPS,
+    seed: int = DEFAULT_SEED,
+) -> dict:
+    """The dependence-uncertainty layer. Slow by design; call it separately."""
+    pack, marginals, corr, _repaired, _trail, _rev = _prepare(
+        industry, answers, correlation_overrides, alpha
+    )
+    out = robustness_assessment(marginals, corr, eps=eps, seed=seed)
+    out["industry"] = pack.id
+    out["industry_name"] = pack.name
+    return out

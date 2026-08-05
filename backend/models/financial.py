@@ -148,38 +148,7 @@ register(
     )
 )
 
-
-register(
-    ModelSpec(
-        key="supplier_health",
-        name="Supplier financial health",
-        version="1.0.0",
-        domain="Supplier credit",
-        method=(
-            "Altman-inspired distress score updates a Beta prior at the industry "
-            "base default rate (Bayesian), giving a posterior probability of "
-            "distress; Monte Carlo over the distress event and loss-given-default "
-            "yields the annual-loss distribution."
-        ),
-        fn=supplier_financial_health,
-        params=[
-            ParamSpec("annual_spend", "Annual spend with supplier", "currency", 4_200_000, unit="USD"),
-            ParamSpec("debt_to_equity", "Debt-to-equity", "number", 2.2, help="Higher is riskier"),
-            ParamSpec("current_ratio", "Current ratio", "number", 1.4, help="Current assets / current liabilities"),
-            ParamSpec("interest_coverage", "Interest coverage", "number", 2.5, help="EBIT / interest expense"),
-            ParamSpec("profit_margin", "Net profit margin", "percent", 0.03),
-            ParamSpec("payment_delinquency_days", "Avg. payment delinquency", "int", 25, unit="days"),
-            ParamSpec("industry_base_rate", "Industry base default rate", "percent", 0.03, advanced=True),
-            ParamSpec("loss_given_default", "Loss given default", "percent", 0.55, advanced=True),
-            ParamSpec("prior_strength", "Prior strength", "number", 20.0, advanced=True),
-            ParamSpec("evidence_strength", "Evidence strength", "number", 12.0, advanced=True),
-            ParamSpec("n_sims", "Scenarios", "int", 20000, advanced=True),
-        ],
-        outputs=[
-            {"key": "probability_of_distress", "label": "Probability of distress (12mo)", "type": "percent"},
-            {"key": "expected_annual_loss", "label": "Expected annual loss", "type": "currency"},
-            {"key": "loss_p95", "label": "Tail loss (P95)", "type": "currency"},
-            {"key": "loss_given_distress", "label": "Loss if distress occurs", "type": "currency"},
-        ],
-    )
-)
+# supplier_health is intentionally NOT registered. See models/__init__.py: it
+# belongs to no industry pack, and its Bayesian distress logic is a candidate
+# intake modulator for third_party_failure rather than a standalone model.
+# The function is kept because that logic is worth reusing.
