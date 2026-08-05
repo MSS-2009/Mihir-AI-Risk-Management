@@ -51,7 +51,7 @@ export function LiveHero() {
         <div>
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-brand" />
-            <span className="eyebrow">Enterprise risk, industrial distribution</span>
+            <span className="eyebrow">Enterprise risk quantification</span>
           </div>
           <div className="mt-5 flex gap-4">
             <span className="mt-1 hidden w-[3px] shrink-0 rounded-full bg-brand sm:block" />
@@ -85,7 +85,7 @@ export function LiveHero() {
         {/* Right: the live distribution */}
         <div className="rounded-2xl border border-rule bg-surface p-5 shadow-lift sm:p-7">
           <div className="flex items-start justify-between gap-3">
-            <div className="eyebrow max-w-[70%]">Outcome distribution · 3-yr net savings from rerouting</div>
+            <div className="eyebrow max-w-[70%]">Live model · 3-yr net savings from rerouting sourcing</div>
             <span className="flex shrink-0 items-center gap-1.5 font-mono text-[0.62rem] text-muted">
               <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-amber" : "bg-brand"}`} />
               {running ? "computing" : "live"}

@@ -68,6 +68,8 @@ export default function StartPage() {
               <button
                 key={pack.id}
                 onClick={() => choose(pack)}
+                aria-label={`Select ${pack.name}: ${pack.engines.map((e) => e.label).join(", ")}`}
+                aria-pressed={active}
                 className={`group flex h-full flex-col rounded-2xl border bg-surface p-6 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-brand hover:shadow-lift ${
                   active ? "border-brand ring-1 ring-brand" : "border-rule"
                 }`}

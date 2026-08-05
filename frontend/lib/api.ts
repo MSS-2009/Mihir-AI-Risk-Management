@@ -230,3 +230,51 @@ export interface AnalyzeResponse {
   interpretation: string;
   trace: { model: string; model_key: string; version: string; seed: number; n_sims?: number };
 }
+
+// ---- documents (secondary path: optional intake pre-fill) ----
+export const getDocumentChecklist = () => req<DocumentsResponse>("/documents/checklist");
+
+export async function uploadDocuments(files: File[]): Promise<DocumentsResponse> {
+  const fd = new FormData();
+  files.forEach((f) => fd.append("files", f));
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/documents`, { method: "POST", body: fd });
+  } catch {
+    throw new ApiError(`Can't reach the analysis engine at ${API_URL}.`, 0);
+  }
+  if (!res.ok) throw new ApiError(`Upload failed (${res.status}).`, res.status);
+  return res.json();
+}
+
+export interface ChecklistItem {
+  id: string;
+  name: string;
+  description: string;
+  unlocks: string[];
+  required: boolean;
+  present: boolean;
+  status: "present" | "missing" | "optional";
+  impact: string | null;
+}
+
+export interface DocumentsResponse {
+  documents?: {
+    filename: string;
+    doc_type: string;
+    confidence: number;
+    extraction: string;
+    fields: Record<string, any>;
+    note?: string | null;
+    chars?: number;
+  }[];
+  checklist: ChecklistItem[];
+  coverage: { required_total: number; required_present: number; pct: number; missing_required: string[] };
+  extracted_params?: Record<string, Record<string, unknown>>;
+  signals?: {
+    signals: { type: string; severity: string; subject: string; message: string; simulated: boolean }[];
+    disclaimer: string;
+  };
+  required_docs?: unknown[];
+  ai_enabled?: boolean;
+}
