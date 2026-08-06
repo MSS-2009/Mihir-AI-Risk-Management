@@ -68,6 +68,62 @@ def health():
     }
 
 
+_SHOWCASE: dict | None = None
+
+
+@app.get("/showcase")
+def showcase():
+    """Headline figures for every industry, for the landing page.
+
+    Computed once and cached for the life of the process. The landing page must
+    show real model output rather than typed-in numbers, but it must not run a
+    50,000-scenario simulation for every visitor: on a free-tier dyno that turns
+    the front page into the slowest thing we ship.
+
+    The top decision ships with its saving distribution, so the page can reprice
+    it against any cost in the browser with no further call.
+    """
+    global _SHOWCASE
+    if _SHOWCASE is not None:
+        return _SHOWCASE
+
+    out = []
+    for industry, pack in INDUSTRY_REGISTRY.items():
+        a = run_assessment(industry, interpret=False, include_sensitivity=False)
+        curve = {p["percentile"]: p["loss"] for p in a["exceedance_curve"]}
+        top = (a.get("decisions") or [None])[0]
+        out.append({
+            "id": industry,
+            "name": pack.name,
+            "tagline": pack.tagline,
+            "expected_annual_loss": a["expected_annual_loss"],
+            "pct_revenue": a["expected_annual_loss_pct_revenue"],
+            "p95": curve.get(95),
+            "p99": curve.get(99),
+            "reference_revenue": pack.reference_revenue,
+            "domains": [d["label"] for d in a["domain_contributions"]],
+            "decision": {
+                k: top[k] for k in (
+                    "id", "title", "question", "cost_upfront", "cost_annual",
+                    "expected_saving_annual", "saving_p10", "saving_p90",
+                    "npv", "npv_p10", "npv_p90", "prob_beneficial",
+                    "annuity_factor", "saving_quantiles", "horizon_years",
+                )
+            } if top else None,
+        })
+    _SHOWCASE = {
+        "industries": out,
+        "n_sims": N_SIMS,
+        "seed": DEFAULT_SEED,
+        "basis": (
+            "Each figure is a seeded run of the published starting calibration for that "
+            "industry, at its reference revenue. Your own numbers replace these once you "
+            "enter your book."
+        ),
+    }
+    return _SHOWCASE
+
+
 @app.get("/industries")
 def list_industries():
     """The five packs: id, name, engines, questions, defaults, correlation.

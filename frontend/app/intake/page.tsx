@@ -8,6 +8,7 @@ import { useSession } from "@/lib/session";
 import { ErrorPanel, LoadingPanel } from "@/components/StatePanels";
 import { Eyebrow } from "@/components/ui";
 import { EntityTable } from "@/components/EntityTable";
+import { DocumentPrefill } from "@/components/intake/DocumentPrefill";
 
 /**
  * The questionnaire. Every question states which model it moves, because a
@@ -75,6 +76,16 @@ export default function IntakePage() {
 
       {pack && (
         <>
+          {/* Before the form, not after it: a large operator will not retype a
+              vendor book that already exists in their purchase orders. */}
+          <div className="mt-8">
+            <DocumentPrefill
+              questions={pack.questions}
+              currentAnswers={local}
+              onApply={(patch) => setLocal((s) => ({ ...s, ...patch }))}
+            />
+          </div>
+
           <div className="mt-10 space-y-10">
             {Object.entries(
               pack.questions.reduce((acc: Record<string, typeof pack.questions>, q) => {

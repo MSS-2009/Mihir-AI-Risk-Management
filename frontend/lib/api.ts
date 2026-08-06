@@ -32,6 +32,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const getHealth = () => req<Health>("/");
 export const getIndustries = () => req<{ industries: Industry[] }>("/industries");
 export const getModels = () => req<ModelsResponse>("/models");
+export const getShowcase = () => req<ShowcaseResponse>("/showcase");
 
 export const assess = (body: AssessRequest) =>
   req<Assessment>("/assess", { method: "POST", body: JSON.stringify(body) });
@@ -207,6 +208,27 @@ export interface PricedDecision {
    *  in the browser matches the server rather than approximating it. */
   saving_quantiles: number[];
   cost_editable: boolean;
+  basis: string;
+}
+
+/** Cached headline figures per industry, for the landing page. */
+export interface ShowcaseIndustry {
+  id: string;
+  name: string;
+  tagline: string;
+  expected_annual_loss: number;
+  pct_revenue: number | null;
+  p95: number;
+  p99: number;
+  reference_revenue: number;
+  domains: string[];
+  decision: PricedDecision | null;
+}
+
+export interface ShowcaseResponse {
+  industries: ShowcaseIndustry[];
+  n_sims: number;
+  seed: number;
   basis: string;
 }
 

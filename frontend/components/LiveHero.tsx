@@ -1,48 +1,50 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { analyze, type AnalyzeResponse } from "@/lib/api";
-import { money, pct } from "@/lib/format";
-import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
+import { getShowcase, type ShowcaseIndustry, type PricedDecision } from "@/lib/api";
+import { money, moneyCompact, pct } from "@/lib/format";
+import { reprice } from "@/lib/reprice";
 import { DistributionChart } from "@/components/charts/DistributionChart";
 import { ScrollFloat, ScrollReveal } from "@/components/ScrollFloat";
 
 /**
- * The signature element. Drag the tariff rate and the outcome distribution moves
- * in real time, every number computed by the validated Python engine (a small,
- * fast run of 2,000 scenarios, debounced), never invented on the client. Watch
- * P10 cross zero: that is the whole thesis, the shape, not a single number.
+ * The signature element: pick an industry, then drag what the action costs and
+ * watch whether it is still worth funding.
+ *
+ * This used to be a tariff slider, which made the whole front page an argument
+ * for one of the five industries and invited every other visitor to conclude
+ * the product was not for them. The lever is now the one thing every operator
+ * in every industry argues about, which is the price of the fix.
+ *
+ * Every figure is real model output. The industry headlines come from a cached
+ * server run, and repricing happens in the browser because NPV is affine in
+ * cost, so dragging the slider is instant and costs the backend nothing.
  */
 export function LiveHero() {
-  const [tariff, setTariff] = useState(0.25);
-  const [result, setResult] = useState<AnalyzeResponse | null>(null);
-  const [running, setRunning] = useState(false);
+  const [data, setData] = useState<ShowcaseIndustry[] | null>(null);
   const [offline, setOffline] = useState(false);
-  const reqId = useRef(0);
-
-  const run = (rate: number) => {
-    const id = ++reqId.current;
-    setRunning(true);
-    analyze({ risk_type: "tariff", params: { current_tariff_rate: rate, n_sims: 2000 } })
-      .then((r) => {
-        if (id === reqId.current) {
-          setResult(r);
-          setOffline(false);
-        }
-      })
-      .catch(() => setOffline(true))
-      .finally(() => id === reqId.current && setRunning(false));
-  };
-
-  const debouncedRun = useDebouncedCallback(run, 140);
+  const [active, setActive] = useState(0);
+  const [costScale, setCostScale] = useState(1);
 
   useEffect(() => {
-    run(0.25);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    getShowcase()
+      .then((r) => setData(r.industries))
+      .catch(() => setOffline(true));
   }, []);
 
-  const o = result?.model_output;
-  const beneficial = o?.prob_reroute_beneficial ?? 0;
+  const ind = data?.[active];
+  const base = ind?.decision;
+
+  // The slider scales the pack's cost estimate; everything else follows.
+  const priced: PricedDecision | null =
+    base
+      ? reprice(base as PricedDecision, {
+          cost_upfront: base.cost_upfront * costScale,
+          cost_annual: base.cost_annual * costScale,
+        })
+      : null;
+
+  const totalCost = priced ? priced.cost_upfront + priced.cost_annual * (priced.horizon_years || 3) : 0;
 
   return (
     <section className="border-b border-rule bg-surface">
@@ -65,9 +67,9 @@ export function LiveHero() {
             />
           </div>
           <ScrollReveal as="p" className="mt-6 max-w-md text-lg leading-relaxed text-muted">
-            Drag the tariff rate. The answer is not one number, it is a shape. Watch the downside cross
-            zero, and the probability of benefit move with it. This is the whole company: we give you the
-            range, not a false certainty.
+            Pick your industry, then drag what the fix costs. The answer is not one number, it is a
+            shape, and it changes when the price does. Watch the downside cross zero. That is the
+            whole company: we give you the range, and we will tell you when not to spend.
           </ScrollReveal>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
@@ -82,80 +84,116 @@ export function LiveHero() {
           </div>
         </div>
 
-        {/* Right: the live distribution */}
+        {/* Right: the live decision */}
         <div className="rounded-2xl border border-rule bg-surface p-5 shadow-lift sm:p-7">
-          <div className="flex items-start justify-between gap-3">
-            <div className="eyebrow max-w-[70%]">Live model · 3-yr net savings from rerouting sourcing</div>
-            <span className="flex shrink-0 items-center gap-1.5 font-mono text-[0.62rem] text-muted">
-              <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-amber" : "bg-brand"}`} />
-              {running ? "computing" : "live"}
-            </span>
+          {/* Industry selector. The point is that this works for all five. */}
+          <div className="flex flex-wrap gap-1.5">
+            {(data || []).map((d, i) => (
+              <button
+                key={d.id}
+                onClick={() => { setActive(i); setCostScale(1); }}
+                aria-pressed={i === active}
+                className={`rounded-md px-2.5 py-1 font-mono text-[0.62rem] uppercase tracking-wide transition ${
+                  i === active ? "bg-brand text-white" : "bg-raised text-muted hover:text-ink"
+                }`}
+              >
+                {SHORT[d.id] || d.name}
+              </button>
+            ))}
           </div>
 
-          <div className="mt-3 min-h-[268px]">
-            {o ? (
-              <DistributionChart
-                expected={o.net_savings_pv_expected}
-                p10={o.net_savings_pv_p10}
-                p90={o.net_savings_pv_p90}
-                threshold={0}
-                height={268}
-              />
-            ) : (
-              <div className="flex h-[268px] items-center justify-center text-sm text-muted">
-                {offline ? "Start the backend to see the live distribution." : "Loading the engine…"}
+          {ind && priced ? (
+            <>
+              <div className="mt-4 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="eyebrow">Should you fund it</div>
+                  <div className="mt-0.5 font-display text-base font-bold leading-snug text-ink">
+                    {priced.title}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full bg-raised px-2 py-0.5 font-mono text-[0.58rem] uppercase tracking-wide text-muted">
+                  3-yr NPV
+                </span>
               </div>
-            )}
-          </div>
 
-          {/* Slider */}
-          <div className="mt-3">
-            <div className="flex items-baseline justify-between">
-              <label htmlFor="hero-tariff" className="text-sm font-medium text-ink">
-                Current tariff rate
-              </label>
-              <span className="font-mono text-lg font-semibold tabular-nums text-brand">{pct(tariff)}</span>
+              <div className="mt-3 min-h-[210px]">
+                <DistributionChart
+                  expected={priced.npv}
+                  p10={priced.npv_p10}
+                  p90={priced.npv_p90}
+                  threshold={0}
+                  height={210}
+                />
+              </div>
+
+              {/* The lever every operator argues about. */}
+              <div className="mt-3">
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="hero-cost" className="text-sm font-medium text-ink">
+                    What the action costs you
+                  </label>
+                  <span className="font-mono text-lg font-semibold tabular-nums text-brand">
+                    {money(totalCost)}
+                  </span>
+                </div>
+                <input
+                  id="hero-cost"
+                  type="range"
+                  min={0.2}
+                  max={2}
+                  step={0.05}
+                  value={costScale}
+                  onChange={(e) => setCostScale(parseFloat(e.target.value))}
+                  className="mt-2 w-full accent-brand"
+                />
+                <div className="mt-1 flex justify-between font-mono text-[0.55rem] text-muted">
+                  <span>a fifth of our estimate</span>
+                  <span>our estimate</span>
+                  <span>twice it</span>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-3 gap-3 border-t border-rule pt-4">
+                <Readout label="Downside · P10" value={moneyCompact(priced.npv_p10)} warn={priced.npv_p10 < 0} />
+                <Readout label="Expected" value={moneyCompact(priced.npv)} warn={priced.npv < 0} />
+                <Readout label="Upside · P90" value={moneyCompact(priced.npv_p90)} />
+              </div>
+              <p className="mt-3 text-sm text-ink/80 tnum">
+                Worth funding in{" "}
+                <span className="font-semibold text-brand">{pct(priced.prob_beneficial)}</span> of{" "}
+                scenarios, against {money(ind.expected_annual_loss)} of expected annual loss across{" "}
+                {ind.domains.length} risk domains.
+                {priced.npv < 0 && (
+                  <span className="text-muted"> At this price we would tell you not to do it.</span>
+                )}
+              </p>
+            </>
+          ) : (
+            <div className="mt-4 flex h-[380px] items-center justify-center text-center text-sm text-muted">
+              {offline
+                ? "Start the backend to see the live models."
+                : "Loading the engine…"}
             </div>
-            <input
-              id="hero-tariff"
-              type="range"
-              min={0.05}
-              max={0.5}
-              step={0.01}
-              value={tariff}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                setTariff(v);
-                debouncedRun(v);
-              }}
-              className="mt-2 w-full accent-brand"
-            />
-          </div>
-
-          {/* Readouts */}
-          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-rule pt-4">
-            <Readout label="Downside · P10" value={o ? money(o.net_savings_pv_p10) : "-"} tone={o && o.net_savings_pv_p10 < 0 ? "ochre" : "bordeaux"} />
-            <Readout label="Expected" value={o ? money(o.net_savings_pv_expected) : "-"} tone="bordeaux" />
-            <Readout label="Upside · P90" value={o ? money(o.net_savings_pv_p90) : "-"} tone="bordeaux" />
-          </div>
-          <p className="mt-3 text-sm text-ink/80 tnum">
-            Rerouting is net-beneficial in{" "}
-            <span className="font-semibold text-brand">{o ? pct(beneficial) : "-"}</span> of scenarios.
-            {o && o.net_savings_pv_p10 < 0 && (
-              <span className="text-muted"> The downside still crosses into loss, that is the risk you would be taking.</span>
-            )}
-          </p>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-function Readout({ label, value, tone }: { label: string; value: string; tone: "bordeaux" | "ochre" }) {
+const SHORT: Record<string, string> = {
+  industrial_distribution: "Distribution",
+  automotive_manufacturing: "Manufacturing",
+  clinical_research: "Clinical",
+  property_data: "Data & property",
+  wealth_management: "Wealth",
+};
+
+function Readout({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div>
       <div className="font-mono text-[0.6rem] uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-0.5 font-mono text-sm font-semibold tabular-nums ${tone === "ochre" ? "text-amber" : "text-ink"}`}>
+      <div className={`mt-0.5 font-mono text-sm font-semibold tabular-nums ${warn ? "text-amber" : "text-ink"}`}>
         {value}
       </div>
     </div>
