@@ -73,6 +73,38 @@ class _Safe(dict):
         return "your book"
 
 
+def _apply_costs(decisions: list, overrides: dict | None, revenue_scale: float) -> list:
+    """Replace pack cost estimates with what the operator says it costs them.
+
+    The first thing a prospect pushes back on is the price tag, and a number
+    they cannot change is one they will argue with instead of acting on. Costs
+    arrive in the units shown on screen, which are already revenue-scaled, so
+    they are converted back to reference scale here and scaled forward again by
+    the evaluator. That keeps one definition of the scaling rather than two.
+    """
+    if not overrides:
+        return decisions
+    scale = revenue_scale or 1.0
+    out = []
+    for d in decisions:
+        o = overrides.get(d.id)
+        if not o:
+            out.append(d)
+            continue
+        up = o.get("cost_upfront")
+        yr = o.get("cost_annual")
+        out.append(
+            type(d)(
+                id=d.id, title=d.title, question=d.question, rationale=d.rationale,
+                interventions=d.interventions,
+                cost_upfront=(float(up) / scale) if up is not None else d.cost_upfront,
+                cost_annual=(float(yr) / scale) if yr is not None else d.cost_annual,
+                effort=d.effort, reversible=d.reversible,
+            )
+        )
+    return out
+
+
 def _prepare(industry: str, answers: dict | None, correlation_overrides: dict | None, alpha: float):
     """Resolve a pack plus intake answers into marginals and a matrix."""
     pack = get_pack(industry)
@@ -112,6 +144,7 @@ def run_assessment(
     include_sensitivity: bool = False,
     interpret: bool = False,
     include_decisions: bool = True,
+    decision_costs: dict | None = None,
 ) -> dict:
     """Composite risk for one industry, plus the sensitivity tornado."""
     pack, marginals, corr, repaired, trail, revenue, facts = _prepare(
@@ -140,10 +173,14 @@ def run_assessment(
     # is computed on the main request rather than deferred.
     scale = (revenue / pack.reference_revenue) ** alpha if revenue else 1.0
     out["decisions"] = (
-        rank_decisions(marginals, corr, _personalise(pack.decisions, facts),
-                       revenue_scale=scale, seed=seed)
+        rank_decisions(
+            marginals, corr,
+            _apply_costs(_personalise(pack.decisions, facts), decision_costs, scale),
+            revenue_scale=scale, seed=seed,
+        )
         if pack.decisions and include_decisions else []
     )
+    out["decision_costs"] = decision_costs or {}
     if interpret:
         out["interpretation"] = portfolio_interpretation(out)
         out["recommendations"] = build_recommendations(out)

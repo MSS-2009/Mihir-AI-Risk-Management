@@ -162,6 +162,17 @@ def evaluate_decision(
     net_annual = expected_saving - cost_yr
     payback = (cost_up / net_annual) if net_annual > 0 and cost_up > 0 else None
 
+    # The saving distribution, so the cost can be edited without re-simulating.
+    #
+    # NPV is affine in cost: npv_s = -upfront + (saving_s - annual) * annuity.
+    # That makes every headline figure recomputable from the saving quantiles
+    # alone, exactly for the mean and the percentiles, and to a quarter of a
+    # percent for the probability. A cost field the operator can drag is worth
+    # far more than one that is right to four decimal places, and a 0.5-second
+    # round trip per keystroke would have made it unusable.
+    grid = np.linspace(0.0, 100.0, 201)
+    saving_quantiles = [round(float(x), 2) for x in np.percentile(saving, grid)]
+
     return {
         "id": decision.id,
         "title": decision.title,
@@ -190,6 +201,9 @@ def evaluate_decision(
         "baseline_expected_loss": round(float(base_total.mean()), 2),
         "horizon_years": horizon_years,
         "discount_rate": discount_rate,
+        "annuity_factor": round(annuity, 6),
+        "saving_quantiles": saving_quantiles,
+        "cost_editable": True,
         "basis": (
             "Cost is a starting estimate you can edit. Saving is computed by re-running "
             "the same 50,000 scenarios with this action in place, paired scenario by "

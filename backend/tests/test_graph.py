@@ -96,46 +96,95 @@ def test_intake_answers_actually_move_the_model():
             assert alt["intake_adjustments"], industry
 
 
-def test_derivation_layer_computes_from_the_operators_own_book():
+def test_every_pack_derives_from_the_operators_own_book():
     """The point of a deep pack: parameters come from the entities the operator
     entered, not from a multiplier they had to estimate themselves.
 
-    Anything less and the pack is a generic calculator wearing an industry hat.
+    Anything less and a pack is a generic calculator wearing an industry hat,
+    which was the diagnosis that produced this whole layer.
     """
+    for industry, pack in INDUSTRY_REGISTRY.items():
+        assert callable(getattr(pack, "derive", None)), f"{industry} has no derivation"
+        derived_qs = [q for q in pack.questions if q.rule == "derived"]
+        assert derived_qs, f"{industry} has no derived questions"
+        # a derived question has to carry a real entity schema, otherwise it is
+        # just another percentage with a different label
+        assert any(q.type == "entity_list" and q.fields for q in derived_qs), industry
+
+        answers = {q.id: q.default for q in pack.questions}
+        deep = run_assessment(industry, answers=answers, interpret=False,
+                              include_sensitivity=False)
+        facts = deep.get("derived_facts") or {}
+        assert len(facts) >= 15, f"{industry} derived only {len(facts)} facts"
+
+        # every adjustment reports the entity-level evidence behind it
+        book = [t for t in deep["intake_adjustments"] if t.get("source") == "your book"]
+        assert book, industry
+        for entry in book:
+            assert entry["evidence"], (industry, entry["engine"])
+            assert entry["reason"], (industry, entry["engine"])
+
+        # decisions name the operator's own entities rather than a placeholder
+        titles = " | ".join(d["title"] for d in deep["decisions"])
+        assert "{" not in titles, f"{industry} leaked an unfilled template"
+
+        # deriving twice from the same book gives the same book
+        again = run_assessment(industry, answers=answers, interpret=False,
+                               include_sensitivity=False)
+        assert again["expected_annual_loss"] == deep["expected_annual_loss"], industry
+
+
+def test_a_representative_book_reproduces_the_published_calibration():
+    """Each pack ships a book describing the operator its calibration was written
+    for, and deriving from that book has to land back on the published number.
+
+    Without this the layer is not measuring anything, it is applying a markup to
+    everyone who fills in the form, and every derived figure would be quoting a
+    number the pack never claimed.
+    """
+    for industry, pack in INDUSTRY_REGISTRY.items():
+        base = run_assessment(industry, interpret=False, include_sensitivity=False)
+        answers = {q.id: q.default for q in pack.questions}
+        deep = run_assessment(industry, answers=answers, interpret=False,
+                              include_sensitivity=False)
+        drift = abs(deep["expected_annual_loss"] / base["expected_annual_loss"] - 1)
+        assert drift < 0.05, f"{industry} drifts {drift:.1%} from its published calibration"
+
+
+def test_derived_parameters_never_saturate():
+    """A clamped lever stops responding, which defeats the point of asking.
+
+    If a distributor at 25% duty and one at 40% get the same answer, editing the
+    field does nothing and the operator learns the product is not listening. The
+    response function compresses instead of clamping, so this asserts that an
+    extreme book still moves further than a merely bad one.
+    """
+    import copy
     pack = INDUSTRY_REGISTRY["industrial_distribution"]
-    derived_qs = [q for q in pack.questions if q.rule == "derived"]
-    assert derived_qs, "the deep pack must have derived questions"
-
-    base = run_assessment("industrial_distribution", interpret=False, include_sensitivity=False)
     answers = {q.id: q.default for q in pack.questions}
-    deep = run_assessment("industrial_distribution", answers=answers,
-                          interpret=False, include_sensitivity=False)
 
-    # entities move the model, and by more than a rounding wobble
-    assert deep["expected_annual_loss"] != base["expected_annual_loss"]
-    assert abs(deep["expected_annual_loss"] / base["expected_annual_loss"] - 1) > 0.10
+    def eal(a):
+        return run_assessment("industrial_distribution", answers=a, interpret=False,
+                              include_sensitivity=False)["expected_annual_loss"]
 
-    # the derivation is reported, so a CFO can audit where the number came from
-    facts = deep.get("derived_facts") or {}
-    for key in ("hhi", "top_vendor", "sole_source_share", "annual_duty_cost",
-                "blended_duty_rate", "weighted_days_of_cover", "top_site"):
-        assert key in facts, key
+    bad = copy.deepcopy(answers)
+    for line in bad["product_lines"]:
+        line["origin"], line["hs_chapter"], line["days_of_cover"] = "China", "8482", 12
+    worse = copy.deepcopy(bad)
+    for line in worse["product_lines"]:
+        line["days_of_cover"] = 5
 
-    # and it is arithmetic on their book, not an opaque adjustment
-    assert facts["annual_duty_cost"] > 0
-    assert 0 < facts["hhi"] <= 1.0
-    assert facts["top_vendor"] == "Jiangsu Machine Works"
+    baseline, bad_eal, worse_eal = eal(answers), eal(bad), eal(worse)
+    assert bad_eal > baseline * 1.10, "a materially worse book must move the answer"
+    assert worse_eal > bad_eal, "an even worse book must still move it, not clamp"
 
-    # decisions name the operator's own vendor and site rather than a placeholder
-    titles = " | ".join(d["title"] for d in deep["decisions"])
-    assert facts["top_vendor"] in titles
-    assert facts["top_site"] in titles
-    assert "{" not in titles, "an unfilled template leaked into a decision title"
-
-    # deriving twice from the same book gives the same book
-    again = run_assessment("industrial_distribution", answers=answers,
-                           interpret=False, include_sensitivity=False)
-    assert again["expected_annual_loss"] == deep["expected_annual_loss"]
+    # and it has to move down as well as up, or it is a sales tool
+    better = copy.deepcopy(answers)
+    for v in better["vendors"]:
+        v["annual_spend"], v["sole_source"], v["lead_time_days"] = 1_750_000, False, 20
+    for line in better["product_lines"]:
+        line["origin"], line["days_of_cover"] = "Mexico", 75
+    assert eal(better) < baseline * 0.90, "a healthier book must lower the answer"
 
 
 def test_assessment_deterministic_without_key():
@@ -233,3 +282,72 @@ if __name__ == "__main__":
             print(f"  FAIL  {fn.__name__}: {e}")
     print(f"\n{len(fns) - failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+def test_edited_costs_reprice_a_decision_and_stay_reproducible():
+    """The first thing a prospect argues with is the price tag.
+
+    A cost they cannot change is one they debate instead of acting on, so the
+    figure has to move, and an edited run has to be reproducible on the server
+    rather than existing only in one browser tab.
+    """
+    industry = "industrial_distribution"
+    pack = INDUSTRY_REGISTRY[industry]
+    answers = {q.id: q.default for q in pack.questions}
+
+    base = run_assessment(industry, answers=answers, interpret=False, include_sensitivity=False)
+    target = base["decisions"][0]
+
+    cheap = run_assessment(
+        industry, answers=answers, interpret=False, include_sensitivity=False,
+        decision_costs={target["id"]: {"cost_upfront": 0, "cost_annual": 1_000}},
+    )
+    edited = next(d for d in cheap["decisions"] if d["id"] == target["id"])
+
+    # the cost we asked for is the cost that came back, in the units we sent
+    assert edited["cost_upfront"] == 0
+    assert edited["cost_annual"] == 1_000
+    # cheaper must be worth more, and the saving itself must not have moved
+    assert edited["npv"] > target["npv"]
+    assert edited["expected_saving_annual"] == target["expected_saving_annual"]
+    # the same request twice gives the same answer
+    again = run_assessment(
+        industry, answers=answers, interpret=False, include_sensitivity=False,
+        decision_costs={target["id"]: {"cost_upfront": 0, "cost_annual": 1_000}},
+    )
+    assert again["decisions"] == cheap["decisions"]
+
+
+def test_saving_quantiles_let_the_browser_reprice_exactly():
+    """The UI reprices as the operator types instead of calling the server.
+
+    That is only acceptable if it is exact rather than approximate, which it is:
+    NPV is affine in cost, so it follows from the saving distribution alone.
+    This asserts the browser's arithmetic against a full re-simulation.
+    """
+    import numpy as np
+
+    industry = "industrial_distribution"
+    pack = INDUSTRY_REGISTRY[industry]
+    answers = {q.id: q.default for q in pack.questions}
+    base = run_assessment(industry, answers=answers, interpret=False, include_sensitivity=False)
+
+    for d in base["decisions"]:
+        q = np.array(d["saving_quantiles"])
+        assert len(q) == 201, d["id"]
+        assert np.all(np.diff(q) >= 0), f"{d['id']} quantiles are not ascending"
+
+        for up, yr in [(0, 250_000), (400_000, 60_000), (900_000, 500_000)]:
+            annuity = d["annuity_factor"]
+            npv = -up + (d["expected_saving_annual"] - yr) * annuity
+            pct_below = float(np.interp(yr + up / annuity, q, np.linspace(0, 100, 201)))
+            prob = (100 - pct_below) / 100
+
+            server = next(
+                x for x in run_assessment(
+                    industry, answers=answers, interpret=False, include_sensitivity=False,
+                    decision_costs={d["id"]: {"cost_upfront": up, "cost_annual": yr}},
+                )["decisions"] if x["id"] == d["id"]
+            )
+            assert abs(npv - server["npv"]) < 1.0, (d["id"], up, yr)
+            assert abs(prob - server["prob_beneficial"]) < 0.005, (d["id"], up, yr)

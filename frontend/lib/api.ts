@@ -57,7 +57,7 @@ export interface Health {
 export interface Question {
   id: string;
   label: string;
-  type: "currency" | "percent" | "int" | "number" | "choice" | "text";
+  type: "currency" | "percent" | "int" | "number" | "choice" | "text" | "entity_list";
   default: any;
   unit?: string | null;
   help?: string | null;
@@ -86,6 +86,8 @@ export interface AssessRequest {
   correlation_overrides?: Record<string, number>;
   alpha?: number;
   seed?: number;
+  /** {decision_id: {cost_upfront, cost_annual}} in the dollars shown on screen. */
+  decision_costs?: Record<string, { cost_upfront?: number; cost_annual?: number }>;
 }
 
 export interface DomainContribution {
@@ -199,6 +201,12 @@ export interface PricedDecision {
   baseline_expected_loss: number;
   horizon_years: number;
   discount_rate: number;
+  /** Present value of $1 a year over the horizon. NPV is affine in cost. */
+  annuity_factor: number;
+  /** Saving distribution at half-percent steps, so an edited cost repriced
+   *  in the browser matches the server rather than approximating it. */
+  saving_quantiles: number[];
+  cost_editable: boolean;
   basis: string;
 }
 

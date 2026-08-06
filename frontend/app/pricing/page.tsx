@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getHealth, type HealthResponse } from "@/lib/api";
+import { getHealth, type Health } from "@/lib/api";
 import { Badge, Button, Eyebrow } from "@/components/ui";
 
 type Row = { label: string; free: boolean | string; growth: boolean | string; cont: boolean | string };
@@ -30,7 +30,7 @@ const TIERS = [
 ];
 
 export default function PricingPage() {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
   useEffect(() => {
     getHealth().then(setHealth).catch(() => {});
   }, []);
@@ -110,7 +110,7 @@ export default function PricingPage() {
 
       {health && (
         <p className="mt-6 font-mono text-[0.66rem] text-muted">
-          Live build status · {health.model_count} models registered · AI interpretation{" "}
+          Live build status · {health.engines} engines registered · AI interpretation{" "}
           {health.ai_enabled ? "enabled" : "in fallback mode"} · gated features are one config flag from launch.
         </p>
       )}

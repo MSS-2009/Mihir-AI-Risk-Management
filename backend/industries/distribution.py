@@ -17,8 +17,18 @@ from engines.decisions import Decision, Intervention
 from engines.modulation import Modulation
 
 from .base import EngineBinding, IndustryPack, Question
-from .derive import derive_all
+from .derive import Derivation, centered, derive_all, response
 from .reference import DISCLAIMER, HS_CHAPTERS
+
+# The book the published calibration describes. A distributor whose own numbers
+# match these gets the pack default back unchanged; everything here measures
+# distance from this operator, not distance from zero.
+REF_VENDOR_HHI = 0.36          # about 2.8 effective vendors
+REF_SOLE_SOURCE_SHARE = 0.60   # most of the spend has no qualified alternate
+REF_LEAD_DAYS = 42.0
+REF_DUTY_RATE = 0.185          # meaningful China exposure, which the pack assumes
+REF_DAYS_OF_COVER = 41.0
+REF_TOP_SITE_SHARE = 0.60
 
 DEFAULT_VENDORS = [
     {"name": "Jiangsu Machine Works", "country": "China", "annual_spend": 3_800_000, "sole_source": True, "lead_time_days": 52},
@@ -51,33 +61,22 @@ def derive_distribution(answers: dict, marginals: list) -> tuple[dict, list[dict
     if not facts:
         return {}, []
 
-    mods: dict[str, Modulation] = {}
-    trail: list[dict] = []
+    d = Derivation()
+    add = d.add
 
-    def add(engine: str, m: Modulation, why: str, evidence: str):
-        if m.is_neutral:
-            return
-        mods[engine] = mods.get(engine, Modulation()).combine(m)
-        trail.append(
-            {
-                "source": "your book",
-                "engine": engine,
-                "reason": why,
-                "evidence": evidence,
-                "frequency_multiplier": round(m.frequency, 4),
-                "magnitude_multiplier": round(m.magnitude, 4),
-            }
-        )
-
-    # Vendor concentration. Benchmark HHI for a healthy book is about 0.25.
+    # Vendor concentration, against the book a mid-market distributor typically
+    # runs: roughly three effective vendors carrying most of the spend.
     if facts.get("hhi"):
-        r = facts["hhi"] / 0.25
         add(
             "third_party_failure",
-            Modulation(frequency=1 + (r - 1) * 0.30, magnitude=1 + (r - 1) * 0.60),
+            Modulation(
+                frequency=response(facts["hhi"], REF_VENDOR_HHI, 0.30),
+                magnitude=response(facts["hhi"], REF_VENDOR_HHI, 0.60),
+            ),
             "Vendor spend is concentrated",
             f"{facts['top_vendor']} is {facts['top_vendor_share']:.0%} of spend; "
-            f"effective vendor count {facts['effective_vendors']}",
+            f"effective vendor count {facts['effective_vendors']} against a reference of "
+            f"{1 / REF_VENDOR_HHI:.1f}",
         )
 
     # Sole-sourcing is the thing that turns a vendor failure into a stoppage.
@@ -85,17 +84,18 @@ def derive_distribution(answers: dict, marginals: list) -> tuple[dict, list[dict
         s = facts["sole_source_share"]
         add(
             "third_party_failure",
-            Modulation(magnitude=1 + s * 0.8),
+            Modulation(magnitude=centered(s, REF_SOLE_SOURCE_SHARE, 0.8)),
             "Part of the book has no qualified alternate",
-            f"{facts['sole_source_count']} sole-source vendors, {s:.0%} of spend",
+            f"{facts['sole_source_count']} sole-source vendors, {s:.0%} of spend "
+            f"against a {REF_SOLE_SOURCE_SHARE:.0%} reference",
         )
 
     # Lead time drives how long a disruption is felt.
     if facts.get("weighted_lead_days"):
         add(
             "schedule_disruption",
-            Modulation(magnitude=facts["weighted_lead_days"] / 35.0),
-            "Lead times are long relative to a 35-day reference",
+            Modulation(magnitude=response(facts["weighted_lead_days"], REF_LEAD_DAYS, 0.70)),
+            f"Lead times against a {REF_LEAD_DAYS:.0f}-day reference",
             f"spend-weighted lead time {facts['weighted_lead_days']:.0f} days",
         )
 
@@ -103,18 +103,19 @@ def derive_distribution(answers: dict, marginals: list) -> tuple[dict, list[dict
     if facts.get("blended_duty_rate"):
         add(
             "input_cost_shock",
-            Modulation(magnitude=facts["blended_duty_rate"] / 0.09),
-            "Duty exposure on the lines you import",
+            Modulation(magnitude=response(facts["blended_duty_rate"], REF_DUTY_RATE, 0.80)),
+            f"Duty exposure against a {REF_DUTY_RATE:.0%} reference",
             f"blended {facts['blended_duty_rate']:.1%} across {facts['line_count']} lines, "
             f"about ${facts['annual_duty_cost']:,.0f} a year",
         )
 
-    # Thin cover is what turns a delay into a lost sale.
+    # Thin cover is what turns a delay into a lost sale. Inverted: more cover
+    # is less exposure.
     if facts.get("weighted_days_of_cover"):
         add(
             "inventory_stockout",
-            Modulation(frequency=45.0 / max(facts["weighted_days_of_cover"], 1)),
-            "Cover against a 45-day reference",
+            Modulation(frequency=response(REF_DAYS_OF_COVER, facts["weighted_days_of_cover"], 0.80)),
+            f"Cover against a {REF_DAYS_OF_COVER:.0f}-day reference",
             f"weighted cover {facts['weighted_days_of_cover']:.0f} days"
             + (f"; thin on {', '.join(facts['thin_cover_lines'])}" if facts.get("thin_cover_lines") else ""),
         )
@@ -123,13 +124,13 @@ def derive_distribution(answers: dict, marginals: list) -> tuple[dict, list[dict
     if facts.get("top_site_share"):
         add(
             "site_disruption",
-            Modulation(magnitude=facts["top_site_share"] / 0.45),
+            Modulation(magnitude=response(facts["top_site_share"], REF_TOP_SITE_SHARE, 0.70)),
             "Throughput is concentrated in one site",
-            f"{facts['top_site']} handles {facts['top_site_share']:.0%} of throughput",
+            f"{facts['top_site']} handles {facts['top_site_share']:.0%} of throughput "
+            f"against a {REF_TOP_SITE_SHARE:.0%} reference",
         )
 
-    facts["_modulations"] = mods
-    return facts, trail
+    return d.result(facts)
 
 
 PACK = IndustryPack(

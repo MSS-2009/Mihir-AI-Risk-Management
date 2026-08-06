@@ -38,6 +38,10 @@ class AssessRequest(BaseModel):
     correlation_overrides: Optional[dict] = None
     alpha: float = 1.0
     seed: int = DEFAULT_SEED
+    # {decision_id: {"cost_upfront": x, "cost_annual": y}}, in the dollars the
+    # operator sees on screen. Sending these back makes an edited run
+    # reproducible rather than something that only existed in one browser tab.
+    decision_costs: Optional[dict] = None
 
 
 class RobustnessRequest(AssessRequest):
@@ -108,6 +112,7 @@ def assess(req: AssessRequest):
         correlation_overrides=req.correlation_overrides,
         alpha=req.alpha,
         seed=req.seed,
+        decision_costs=req.decision_costs,
     )
 
 

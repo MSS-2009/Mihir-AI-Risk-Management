@@ -11,8 +11,18 @@ import { money, moneyCompact, pct } from "@/lib/format";
  * Deliberately visual rather than prose. The rationale is one line and folded
  * away, because a wall of explanation is what a reader skips.
  */
-export function DecisionCard({ d }: { d: PricedDecision }) {
+export function DecisionCard({
+  d,
+  edited,
+  onCostChange,
+}: {
+  d: PricedDecision;
+  /** True when the operator has replaced the pack's cost estimate. */
+  edited?: boolean;
+  onCostChange?: (patch: { cost_upfront?: number; cost_annual?: number }) => void;
+}) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   // Verdict is driven by the model, not by editorial choice.
   const verdict =
@@ -54,6 +64,40 @@ export function DecisionCard({ d }: { d: PricedDecision }) {
         <Bar label="Saves" value={d.expected_saving_annual} span={span} className={tone.bg} money
              range={[d.saving_p10, d.saving_p90]} />
       </div>
+
+      {/* The cost is ours; the price is theirs. Every figure above reprices as
+          they type, because a number they cannot change is one they argue with
+          instead of acting on. */}
+      {onCostChange && (
+        <div className="mt-3 rounded-lg border border-rule bg-raised/50 px-3 py-2">
+          <button
+            onClick={() => setEditing((s) => !s)}
+            aria-expanded={editing}
+            className="flex w-full items-center justify-between font-mono text-[0.6rem] uppercase tracking-wide text-muted hover:text-brand"
+          >
+            <span>{edited ? "your cost" : "our cost estimate"}</span>
+            <span className="text-brand">{editing ? "done" : "change"}</span>
+          </button>
+          {editing && (
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <CostField
+                label="One-time"
+                value={d.cost_upfront}
+                onChange={(v) => onCostChange({ cost_upfront: v })}
+              />
+              <CostField
+                label="Per year"
+                value={d.cost_annual}
+                onChange={(v) => onCostChange({ cost_annual: v })}
+              />
+              <p className="col-span-2 font-mono text-[0.55rem] leading-relaxed text-muted">
+                Repriced against the same 50,000 scenarios. The saving does not change,
+                only what you pay for it.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Probability, as a filled track rather than a sentence. */}
       <div className="mt-4">
@@ -114,6 +158,28 @@ function Bar({
         {isMoney ? money(value) : value}
       </span>
     </div>
+  );
+}
+
+function CostField({
+  label, value, onChange,
+}: {
+  label: string; value: number; onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="font-mono text-[0.55rem] uppercase tracking-wide text-muted">{label}</span>
+      <div className="mt-1 flex items-center rounded border border-rule bg-surface focus-within:border-brand">
+        <span className="pl-2 font-mono text-xs text-muted">$</span>
+        <input
+          inputMode="numeric"
+          value={Number(value || 0).toLocaleString("en-US")}
+          onChange={(e) => onChange(parseFloat(e.target.value.replace(/[^0-9.]/g, "")) || 0)}
+          aria-label={`${label} cost`}
+          className="w-full bg-transparent px-1.5 py-1 font-mono text-xs tabular-nums text-ink outline-none"
+        />
+      </div>
+    </label>
   );
 }
 

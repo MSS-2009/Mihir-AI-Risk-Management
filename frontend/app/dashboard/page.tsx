@@ -1,11 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { assess, assessRobustness, type Assessment, type RobustnessResponse } from "@/lib/api";
+import { assess, assessRobustness, type Assessment, type PricedDecision, type RobustnessResponse } from "@/lib/api";
 import { DecisionCard } from "@/components/dashboard/DecisionCard";
 import { ExposureWaterfall } from "@/components/dashboard/ExposureWaterfall";
 import { money, moneyCompact, pct } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { repriceAll, type CostOverride } from "@/lib/reprice";
 import { ErrorPanel, LoadingPanel } from "@/components/StatePanels";
 import { InterpretationPanel } from "@/components/InterpretationPanel";
 import { ExceedanceCurve } from "@/components/charts/ExceedanceCurve";
@@ -25,6 +26,9 @@ export default function DashboardPage() {
   // What the reader actually gets. Choosing one HIDES the others: showing every
   // format at once is the information overload this control exists to prevent.
   const [view, setView] = useState<"summary" | "onepager" | "full">("summary");
+  // What the operator says each action costs THEM. Sent back on a re-run so an
+  // edited assessment is reproducible, not something that lived in one tab.
+  const [costs, setCosts] = useState<Record<string, CostOverride>>({});
   const robReq = useRef(0);
 
   const loadRobustness = useCallback(
@@ -51,7 +55,7 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     setRob(null);
-    assess({ industry, answers })
+    assess({ industry, answers, decision_costs: costs })
       .then((a) => {
         setData(a);
         // The dependence sweep is ~90 simulations, so it loads after the
@@ -60,7 +64,7 @@ export default function DashboardPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [industry, answers, eps, loadRobustness]);
+  }, [industry, answers, eps, costs, loadRobustness]);
 
   useEffect(() => {
     if (!ready) return;
@@ -68,6 +72,10 @@ export default function DashboardPage() {
       run();
     }
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Repriced in the browser: NPV is affine in cost, so an edited price is
+  // exact rather than approximate, and instant rather than a round trip.
+  const decisions = data?.decisions ? repriceAll(data.decisions, costs) : [];
 
   const onEps = (v: number) => {
     setEps(v);
@@ -155,7 +163,7 @@ export default function DashboardPage() {
 
       {data && (
         <div className={`mt-8 space-y-8 ${loading ? "opacity-60 transition-opacity" : ""}`}>
-          {view === "summary" && <ExecutiveSummary a={data} r={rob} />}
+          {view === "summary" && <ExecutiveSummary a={data} r={rob} decisions={decisions} />}
 
           {/* THE LEAD: what to actually do, priced. */}
           {view !== "summary" && data.decisions?.length > 0 && (
@@ -174,7 +182,16 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {data.decisions.map((d) => <DecisionCard key={d.id} d={d} />)}
+                {decisions.map((d) => (
+                  <DecisionCard
+                    key={d.id}
+                    d={d}
+                    edited={!!costs[d.id]}
+                    onCostChange={(patch) =>
+                      setCosts((s) => ({ ...s, [d.id]: { ...s[d.id], ...patch } }))
+                    }
+                  />
+                ))}
               </div>
 
               <div className="mt-6 rounded-2xl border border-rule bg-surface p-6 shadow-card">
@@ -190,7 +207,7 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <div className="mt-5">
-                  <ExposureWaterfall baseline={data.expected_annual_loss} decisions={data.decisions} />
+                  <ExposureWaterfall baseline={data.expected_annual_loss} decisions={decisions} />
                 </div>
               </div>
             </section>
@@ -239,9 +256,13 @@ export default function DashboardPage() {
 }
 
 /** Executive summary: one call, one number, one caveat. Nothing else. */
-function ExecutiveSummary({ a, r }: { a: Assessment; r: RobustnessResponse | null }) {
-  const top = a.decisions?.[0];
-  const worth = (a.decisions || []).filter((d) => d.npv > 0);
+function ExecutiveSummary({
+  a, r, decisions,
+}: {
+  a: Assessment; r: RobustnessResponse | null; decisions: PricedDecision[];
+}) {
+  const top = decisions[0];
+  const worth = decisions.filter((d) => d.npv > 0);
   const P = Object.fromEntries(a.exceedance_curve.map((e) => [e.percentile, e.loss]));
   return (
     <div className="rounded-2xl border border-rule bg-surface p-8 shadow-card sm:p-10">
@@ -251,13 +272,13 @@ function ExecutiveSummary({ a, r }: { a: Assessment; r: RobustnessResponse | nul
         <p className="thesis mt-4 max-w-3xl text-2xl leading-snug text-ink sm:text-3xl">
           {worth.length > 0 ? (
             <>
-              Fund <span className="text-brand">{top.title.toLowerCase()}</span>. It returns{" "}
+              <span className="text-brand">{top.title}</span>. It returns{" "}
               <span className="text-emerald">{money(top.npv)}</span> over three years and is worth
               doing in {pct(top.prob_beneficial)} of scenarios.
             </>
           ) : (
             <>
-              None of the {a.decisions.length} actions we priced pays for itself at current
+              None of the {decisions.length} actions we priced pays for itself at current
               estimates. Your exposure is cheaper to carry than to remove.
             </>
           )}
@@ -288,7 +309,7 @@ function ExecutiveSummary({ a, r }: { a: Assessment; r: RobustnessResponse | nul
         <div>
           <div className="eyebrow">Actions worth funding</div>
           <div className="mt-1 font-display text-3xl font-bold tabular-nums text-ink">
-            {worth.length} of {a.decisions?.length ?? 0}
+            {worth.length} of {decisions.length}
           </div>
           <div className="mt-0.5 font-mono text-[0.66rem] text-muted">
             {money(worth.reduce((s, d) => s + d.npv, 0))} combined NPV
