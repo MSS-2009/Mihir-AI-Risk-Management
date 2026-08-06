@@ -21,7 +21,7 @@ from industries import INDUSTRY_REGISTRY  # noqa: E402
 
 def test_every_industry_assesses_without_api_key():
     for industry in INDUSTRY_REGISTRY:
-        a = run_assessment(industry)
+        a = run_assessment(industry, interpret=True, include_sensitivity=True)
         assert a["expected_annual_loss"] > 0, industry
         assert a["interpretation"], industry
         assert a["recommendations"], industry
@@ -32,7 +32,7 @@ def test_recommendations_always_carry_impact_and_range():
     """Never a bare 'you should': every action states what it is worth and how
     bad the bad case is."""
     for industry in INDUSTRY_REGISTRY:
-        for r in run_assessment(industry)["recommendations"]:
+        for r in run_assessment(industry, interpret=True, include_sensitivity=True)["recommendations"]:
             assert r["expected_annual_exposure"] > 0
             assert r["tail_exposure_p95"] >= r["expected_annual_exposure"]
             assert r["title"] and r["rationale"]
@@ -40,7 +40,7 @@ def test_recommendations_always_carry_impact_and_range():
 
 def test_recommendations_ranked():
     for industry in INDUSTRY_REGISTRY:
-        recs = run_assessment(industry)["recommendations"]
+        recs = run_assessment(industry, interpret=True, include_sensitivity=True)["recommendations"]
         assert [r["rank"] for r in recs] == list(range(1, len(recs) + 1))
         tails = [r["tail_exposure_p95"] for r in recs]
         assert tails == sorted(tails, reverse=True)
@@ -49,7 +49,7 @@ def test_recommendations_ranked():
 def test_narrative_states_a_range_not_just_a_point():
     """Rule 4: never a point estimate without its range."""
     for industry in INDUSTRY_REGISTRY:
-        text = run_assessment(industry)["interpretation"]
+        text = run_assessment(industry, interpret=True, include_sensitivity=True)["interpretation"]
         assert "P95" in text and "P99" in text, industry
 
 
@@ -57,7 +57,7 @@ def test_narrative_makes_no_banned_claim():
     """The lint bans claim PATTERNS, not the word 'accurate', which the
     methodology page legitimately needs."""
     for industry in INDUSTRY_REGISTRY:
-        a = run_assessment(industry)
+        a = run_assessment(industry, interpret=True, include_sensitivity=True)
         assert not check_claims(a["interpretation"]), industry
         for r in a["recommendations"]:
             assert not check_claims(r["rationale"] + r["title"]), industry
@@ -96,8 +96,8 @@ def test_intake_answers_actually_move_the_model():
 def test_assessment_deterministic_without_key():
     import json
     for industry in ["clinical_research", "industrial_distribution"]:
-        a = json.dumps(run_assessment(industry), sort_keys=True, default=str)
-        b = json.dumps(run_assessment(industry), sort_keys=True, default=str)
+        a = json.dumps(run_assessment(industry, interpret=True, include_sensitivity=True), sort_keys=True, default=str)
+        b = json.dumps(run_assessment(industry, interpret=True, include_sensitivity=True), sort_keys=True, default=str)
         assert a == b, industry
 
 
@@ -107,6 +107,46 @@ def test_robustness_runs_for_every_industry_without_key():
         assert r["robustness"]["p99_low"] <= r["robustness"]["p99_point"] <= r["robustness"]["p99_high"]
         assert r["dependence_fragility"]
         assert not check_claims(r["reading"]), industry
+
+
+def test_every_industry_prices_its_decisions():
+    """Decisions are the lead output, so every pack must produce them and every
+    one must carry a cost, a saving with a range, and a probability."""
+    for industry in INDUSTRY_REGISTRY:
+        a = run_assessment(industry)
+        assert a["decisions"], industry
+        for d in a["decisions"]:
+            assert d["cost_upfront"] + d["cost_annual"] > 0, industry
+            assert d["saving_p10"] <= d["expected_saving_annual"] <= d["saving_p90"]
+            assert 0.0 <= d["prob_beneficial"] <= 1.0
+            assert d["npv_p10"] <= d["npv"] <= d["npv_p90"]
+
+
+def test_decisions_ranked_by_npv():
+    for industry in INDUSTRY_REGISTRY:
+        npvs = [d["npv"] for d in run_assessment(industry)["decisions"]]
+        assert npvs == sorted(npvs, reverse=True), industry
+
+
+def test_a_null_decision_saves_nothing():
+    """Common random numbers must make an intervention of 1.0x a true no-op,
+    otherwise every reported saving is partly sampling noise."""
+    from engines.decisions import Decision, Intervention, evaluate_decision
+    from industries import get_pack
+    pack = get_pack("industrial_distribution")
+    corr, _ = pack.matrix()
+    null = Decision(
+        id="null", title="Do nothing", question="?", rationale="",
+        interventions=[Intervention("cyber_loss", frequency=1.0, magnitude=1.0)],
+    )
+    r = evaluate_decision(pack.marginals(), corr, null)
+    assert abs(r["expected_saving_annual"]) < 1e-6, r["expected_saving_annual"]
+
+
+def test_decisions_deterministic():
+    a = run_assessment("industrial_distribution")["decisions"]
+    b = run_assessment("industrial_distribution")["decisions"]
+    assert [x["npv"] for x in a] == [x["npv"] for x in b]
 
 
 def test_api_surface():
@@ -129,7 +169,7 @@ def test_no_cross_industry_leakage():
     """A user in one industry must never be shown another industry's models."""
     names = {i: p.name for i, p in INDUSTRY_REGISTRY.items()}
     for industry in INDUSTRY_REGISTRY:
-        text = run_assessment(industry)["interpretation"].lower()
+        text = run_assessment(industry, interpret=True, include_sensitivity=True)["interpretation"].lower()
         for other, other_name in names.items():
             if other == industry:
                 continue

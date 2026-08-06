@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from engines.copula import BASELINE_CORRELATION, build_matrix, ensure_pd, require_pd
+from engines.decisions import Decision
 from engines.fair import Marginal
 
 
@@ -63,6 +64,9 @@ class IndustryPack:
     bindings: list[EngineBinding]
     correlation_pairs: dict[tuple[str, str], float]
     questions: list[Question]
+    # The levers an operator in this industry can actually pull. Data, like
+    # everything else in a pack: engines never know what a decision is.
+    decisions: list[Decision] = field(default_factory=list)
     vocabulary: dict[str, str] = field(default_factory=dict)
     baseline_correlation: float = BASELINE_CORRELATION
 
@@ -151,5 +155,18 @@ class IndustryPack:
                     for (a, b), rho in self.correlation_pairs.items()
                 ],
             },
+            "decisions": [
+                {
+                    "id": d.id,
+                    "title": d.title,
+                    "question": d.question,
+                    "rationale": d.rationale,
+                    "cost_upfront": d.cost_upfront,
+                    "cost_annual": d.cost_annual,
+                    "effort": d.effort,
+                    "engines": [iv.engine for iv in d.interventions],
+                }
+                for d in self.decisions
+            ],
             "vocabulary": self.vocabulary,
         }

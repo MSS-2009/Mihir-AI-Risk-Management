@@ -4,6 +4,8 @@ Parameters are starting estimates from expert judgment, not measured loss data.
 As with clinical, this is a regulated setting: nothing in this pack should be
 presented as an empirical benchmark, because it is not one.
 """
+from engines.decisions import Decision, Intervention
+
 from .base import EngineBinding, IndustryPack, Question
 
 PACK = IndustryPack(
@@ -67,6 +69,59 @@ PACK = IndustryPack(
         Question("core_vendors", "Number of core platform vendors", "int", 4,
                  help="More platform dependencies, more outage exposure.",
                  targets=["third_party_failure"], rule="site_count_inverse"),
+    ],
+    decisions=[
+        Decision(
+            id="systematic_compliance",
+            title="Move compliance review from periodic to systematic",
+            question="Should we review every file rather than a sample?",
+            rationale=(
+                "Systematic review catches suitability and disclosure gaps while they "
+                "are still fixable, which changes both how often a finding happens and "
+                "how large it is."
+            ),
+            interventions=[
+                Intervention("regulatory_compliance_failure", frequency=0.55, magnitude=0.80),
+                Intervention("reputational_event", frequency=0.85),
+            ],
+            cost_upfront=0, cost_annual=195_000, effort="moderate",
+        ),
+        Decision(
+            id="cyber_uplift",
+            title="Advance cyber controls one maturity level",
+            question="Should we fund the next step of the security roadmap?",
+            rationale=(
+                "Client financial data is the asset most likely to be attacked and the "
+                "one whose loss travels furthest into reputation."
+            ),
+            interventions=[
+                Intervention("cyber_loss", frequency=0.60),
+                Intervention("reputational_event", frequency=0.85),
+            ],
+            cost_upfront=85_000, cost_annual=140_000, effort="moderate",
+        ),
+        Decision(
+            id="documentation_standard",
+            title="Standardise and audit advice documentation",
+            question="Should we audit how advice is recorded?",
+            rationale=(
+                "Documentation is the primary defence when advice is challenged. It "
+                "does not stop the challenge, it decides how it ends."
+            ),
+            interventions=[Intervention("regulatory_compliance_failure", magnitude=0.65)],
+            cost_upfront=0, cost_annual=110_000, effort="low",
+        ),
+        Decision(
+            id="retention_programme",
+            title="Fund a structured client retention programme",
+            question="Should we invest in retention ahead of the next drawdown?",
+            rationale=(
+                "Attrition spikes exactly when markets fall and fee revenue is already "
+                "down. Retention work bought in advance is what blunts that."
+            ),
+            interventions=[Intervention("counterparty_concentration", frequency=0.70, magnitude=0.85)],
+            cost_upfront=0, cost_annual=125_000, effort="moderate",
+        ),
     ],
     vocabulary={"counterparty": "client", "third_party": "platform vendor"},
 )

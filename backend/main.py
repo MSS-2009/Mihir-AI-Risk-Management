@@ -117,7 +117,7 @@ def assess_robustness(req: RobustnessRequest):
     portfolio simulations and would otherwise block the dashboard."""
     if req.industry not in INDUSTRY_REGISTRY:
         raise HTTPException(404, f"unknown industry '{req.industry}'")
-    return run_robustness(
+    out = run_robustness(
         req.industry,
         answers=req.answers,
         correlation_overrides=req.correlation_overrides,
@@ -125,6 +125,16 @@ def assess_robustness(req: RobustnessRequest):
         eps=req.eps,
         seed=req.seed,
     )
+    # Sensitivity and the narrative ride along with the deferred call so the
+    # decision view paints fast.
+    extra = run_assessment(
+        req.industry, answers=req.answers, correlation_overrides=req.correlation_overrides,
+        alpha=req.alpha, seed=req.seed, include_sensitivity=True, interpret=True,
+        include_decisions=False,
+    )
+    out["sensitivity"] = extra.get("sensitivity", [])
+    out["interpretation"] = extra.get("interpretation", "")
+    return out
 
 
 @app.post("/analyze")

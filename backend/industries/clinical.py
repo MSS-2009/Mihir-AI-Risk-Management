@@ -6,6 +6,8 @@ grounding we do not have, in a regulated setting, would shade into
 misrepresentation. Every default is labelled as an editable starting estimate
 and the sensitivity output shows which judgments actually drive the answer.
 """
+from engines.decisions import Decision, Intervention
+
 from .base import EngineBinding, IndustryPack, Question
 
 PACK = IndustryPack(
@@ -68,6 +70,58 @@ PACK = IndustryPack(
         Question("top_sponsor_share", "Share of revenue from your largest sponsor", "percent", 0.35,
                  help="Concentration raises both the odds and the cost of losing a sponsor.",
                  targets=["counterparty_concentration"], rule="concentration"),
+    ],
+    decisions=[
+        Decision(
+            id="add_sites",
+            title="Activate additional trial sites",
+            question="Should we open more sites to protect the enrollment curve?",
+            rationale=(
+                "More sites both spread outage exposure and give recruitment more "
+                "places to come from, which is the main defence against slipping."
+            ),
+            interventions=[
+                Intervention("site_disruption", magnitude=0.55),
+                Intervention("schedule_disruption", frequency=0.75),
+            ],
+            cost_upfront=190_000, cost_annual=240_000, effort="high",
+        ),
+        Decision(
+            id="monitoring_uplift",
+            title="Move protocol monitoring from periodic to risk-based continuous",
+            question="Should we monitor continuously rather than on a schedule?",
+            rationale=(
+                "Deviations found early are documentation problems. Found late they "
+                "are findings. This mostly changes how often one escalates."
+            ),
+            interventions=[Intervention("regulatory_compliance_failure", frequency=0.60, magnitude=0.80)],
+            cost_upfront=0, cost_annual=260_000, effort="moderate",
+        ),
+        Decision(
+            id="phi_controls",
+            title="Advance patient-data controls one maturity level",
+            question="Should we fund the next step of data protection?",
+            rationale=(
+                "A patient-data incident is both a loss and a regulatory event. "
+                "Controls reduce how often one occurs."
+            ),
+            interventions=[
+                Intervention("cyber_loss", frequency=0.60),
+                Intervention("regulatory_compliance_failure", frequency=0.85),
+            ],
+            cost_upfront=140_000, cost_annual=175_000, effort="moderate",
+        ),
+        Decision(
+            id="sponsor_diversification",
+            title="Reduce dependence on your largest sponsor",
+            question="Should we invest in business development to spread sponsors?",
+            rationale=(
+                "One sponsor pausing a programme should not decide your year. "
+                "Spreading the book lowers what any single pause costs."
+            ),
+            interventions=[Intervention("counterparty_concentration", magnitude=0.60)],
+            cost_upfront=0, cost_annual=230_000, effort="high",
+        ),
     ],
     vocabulary={"counterparty": "sponsor", "site": "trial site", "schedule": "enrollment"},
 )

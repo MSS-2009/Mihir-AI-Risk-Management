@@ -13,6 +13,7 @@ and the fragility ranking is unstable at smaller samples.
 from __future__ import annotations
 
 from engines.composite import composite_risk_correlation
+from engines.decisions import rank_decisions
 from engines.constants import DEFAULT_SEED, N_SIMS
 from engines.modulation import apply_modulations
 from engines.robustness import DEFAULT_EPS, robustness_assessment
@@ -41,8 +42,9 @@ def run_assessment(
     alpha: float = 1.0,
     n_sims: int = N_SIMS,
     seed: int = DEFAULT_SEED,
-    include_sensitivity: bool = True,
-    interpret: bool = True,
+    include_sensitivity: bool = False,
+    interpret: bool = False,
+    include_decisions: bool = True,
 ) -> dict:
     """Composite risk for one industry, plus the sensitivity tornado."""
     pack, marginals, corr, repaired, trail, revenue = _prepare(
@@ -66,6 +68,13 @@ def run_assessment(
     out["intake_adjustments"] = trail
     if include_sensitivity:
         out["sensitivity"] = sensitivity(marginals, corr, seed=seed)
+    # The priced decisions. This is what an operator can actually act on, so it
+    # is computed on the main request rather than deferred.
+    scale = (revenue / pack.reference_revenue) ** alpha if revenue else 1.0
+    out["decisions"] = (
+        rank_decisions(marginals, corr, pack.decisions, revenue_scale=scale, seed=seed)
+        if pack.decisions and include_decisions else []
+    )
     if interpret:
         out["interpretation"] = portfolio_interpretation(out)
         out["recommendations"] = build_recommendations(out)

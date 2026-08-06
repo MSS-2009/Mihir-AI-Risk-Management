@@ -2,6 +2,8 @@
 
 Parameters are starting estimates from expert judgment, not measured loss data.
 """
+from engines.decisions import Decision, Intervention
+
 from .base import EngineBinding, IndustryPack, Question
 
 PACK = IndustryPack(
@@ -62,6 +64,55 @@ PACK = IndustryPack(
                  choices=["Simple", "Moderate", "Complex", "Highly restrictive"],
                  help="More restrictive terms create more ways to breach them.",
                  targets=["regulatory_compliance_failure"], rule="process_maturity_inverse"),
+    ],
+    decisions=[
+        Decision(
+            id="continuous_validation",
+            title="Move model validation to continuous with a holdout set",
+            question="Should we validate continuously instead of periodically?",
+            rationale=(
+                "Validation is what catches a wrong output before a customer acts on "
+                "it. It cuts how often bad output ships and how far it gets."
+            ),
+            interventions=[Intervention("model_error", frequency=0.55, magnitude=0.75)],
+            cost_upfront=0, cost_annual=210_000, effort="moderate",
+        ),
+        Decision(
+            id="redundant_sources",
+            title="Add a fallback for your most critical upstream source",
+            question="Should we pay for a redundant data feed?",
+            rationale=(
+                "An upstream outage stops your product. A fallback does not prevent "
+                "their outage, it prevents yours."
+            ),
+            interventions=[Intervention("third_party_failure", magnitude=0.45)],
+            cost_upfront=60_000, cost_annual=165_000, effort="moderate",
+        ),
+        Decision(
+            id="privacy_uplift",
+            title="Advance privacy and security controls one level",
+            question="Should we fund the next step of the security roadmap?",
+            rationale=(
+                "Stronger controls lower how often an incident becomes a reportable "
+                "loss. They also reduce the compliance exposure that follows one."
+            ),
+            interventions=[
+                Intervention("cyber_loss", frequency=0.60),
+                Intervention("regulatory_compliance_failure", frequency=0.80),
+            ],
+            cost_upfront=120_000, cost_annual=190_000, effort="moderate",
+        ),
+        Decision(
+            id="diversify_clients",
+            title="Reduce revenue concentration in your largest client",
+            question="Should we invest in winning mid-size accounts?",
+            rationale=(
+                "Concentration means one renewal conversation decides your year. "
+                "Spreading it lowers what any single loss costs."
+            ),
+            interventions=[Intervention("counterparty_concentration", magnitude=0.65)],
+            cost_upfront=0, cost_annual=280_000, effort="high",
+        ),
     ],
     vocabulary={"counterparty": "client", "third_party": "data vendor"},
 )

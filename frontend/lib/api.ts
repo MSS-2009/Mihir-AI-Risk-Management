@@ -144,6 +144,7 @@ export interface Assessment {
   };
   domain_contributions: DomainContribution[];
   sensitivity: SensitivityRow[];
+  decisions: PricedDecision[];
   intake_adjustments: IntakeAdjustment[];
   interpretation: string;
   recommendations: {
@@ -168,6 +169,34 @@ export interface Assessment {
     intake_adjustments?: IntakeAdjustment[];
     [k: string]: any;
   };
+}
+
+export interface PricedDecision {
+  id: string;
+  rank: number;
+  title: string;
+  question: string;
+  rationale: string;
+  engines: string[];
+  effort: string;
+  reversible: boolean;
+  cost_upfront: number;
+  cost_annual: number;
+  expected_saving_annual: number;
+  saving_p10: number;
+  saving_p90: number;
+  net_annual: number;
+  npv: number;
+  npv_p10: number;
+  npv_p90: number;
+  prob_beneficial: number;
+  payback_years: number | null;
+  p95_reduction: number;
+  p99_reduction: number;
+  baseline_expected_loss: number;
+  horizon_years: number;
+  discount_rate: number;
+  basis: string;
 }
 
 export interface FragilityRow {

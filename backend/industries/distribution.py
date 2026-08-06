@@ -4,6 +4,8 @@ Parameters are starting estimates from expert judgment, not measured loss data.
 They are editable everywhere they appear and the sensitivity output shows which
 of them actually move the answer.
 """
+from engines.decisions import Decision, Intervention
+
 from .base import EngineBinding, IndustryPack, Question
 
 PACK = IndustryPack(
@@ -80,6 +82,72 @@ PACK = IndustryPack(
             choices=["Initial", "Developing", "Defined", "Managed", "Optimizing"],
             help="Stronger controls lower how often an incident becomes a loss event.",
             targets=["cyber_loss"], rule="control_maturity",
+        ),
+    ],
+    decisions=[
+        Decision(
+            id="dual_source_top_vendor",
+            title="Qualify a second source for your largest vendor",
+            question="Should we dual-source the line we buy most of?",
+            rationale=(
+                "Concentration is what turns a vendor problem into your problem. A "
+                "qualified alternate does not stop the failure, it stops the failure "
+                "from stopping you, so it cuts severity far more than frequency."
+            ),
+            interventions=[
+                Intervention("third_party_failure", frequency=0.95, magnitude=0.55),
+                Intervention("schedule_disruption", magnitude=0.85),
+            ],
+            cost_upfront=180_000, cost_annual=95_000, effort="high",
+        ),
+        Decision(
+            id="raise_days_of_cover",
+            title="Raise days of cover on your fastest-moving lines",
+            question="Should we hold more inventory on the lines that stock out?",
+            rationale=(
+                "Cover is a buffer that absorbs delay before it becomes a lost sale. "
+                "It mostly prevents the stockout rather than shrinking it, and it "
+                "also absorbs part of a logistics delay."
+            ),
+            interventions=[
+                Intervention("inventory_stockout", frequency=0.60, magnitude=0.85),
+                Intervention("schedule_disruption", magnitude=0.90),
+            ],
+            cost_upfront=0, cost_annual=240_000, effort="low",
+        ),
+        Decision(
+            id="tariff_hedge",
+            title="Lock landed cost on your exposed import volume",
+            question="Should we fix duty and freight terms rather than float?",
+            rationale=(
+                "Fixing terms trades some upside for a much narrower range. It does "
+                "not change how often trade policy moves, it changes how much of that "
+                "move lands on you."
+            ),
+            interventions=[Intervention("input_cost_shock", magnitude=0.55)],
+            cost_upfront=0, cost_annual=185_000, effort="moderate",
+        ),
+        Decision(
+            id="second_dc",
+            title="Establish failover for your primary distribution centre",
+            question="Should we stand up a backup site for our busiest DC?",
+            rationale=(
+                "A single site concentrates outage risk. Failover does not make an "
+                "outage less likely, it makes one survivable."
+            ),
+            interventions=[Intervention("site_disruption", magnitude=0.45)],
+            cost_upfront=420_000, cost_annual=130_000, effort="high",
+        ),
+        Decision(
+            id="security_uplift",
+            title="Advance security controls one maturity level",
+            question="Should we fund the next step of the security roadmap?",
+            rationale=(
+                "Stronger controls reduce how often an incident becomes a loss event. "
+                "A breach still costs what it costs; there are just fewer of them."
+            ),
+            interventions=[Intervention("cyber_loss", frequency=0.65)],
+            cost_upfront=90_000, cost_annual=145_000, effort="moderate",
         ),
     ],
     vocabulary={

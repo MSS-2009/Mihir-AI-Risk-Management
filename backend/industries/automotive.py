@@ -2,6 +2,8 @@
 
 Parameters are starting estimates from expert judgment, not measured loss data.
 """
+from engines.decisions import Decision, Intervention
+
 from .base import EngineBinding, IndustryPack, Question
 
 PACK = IndustryPack(
@@ -60,6 +62,58 @@ PACK = IndustryPack(
                  choices=["Initial", "Developing", "Defined", "Managed", "Optimizing"],
                  help="Stronger controls lower how often an incident becomes a loss event.",
                  targets=["cyber_loss"], rule="control_maturity"),
+    ],
+    decisions=[
+        Decision(
+            id="dual_source_tier1",
+            title="Qualify a second source for your most concentrated tier-one",
+            question="Should we dual-source the supplier we cannot replace?",
+            rationale=(
+                "A single-sourced part stops the line. An alternate does not prevent "
+                "the supplier failing, it prevents that failure reaching your build."
+            ),
+            interventions=[
+                Intervention("third_party_failure", frequency=0.95, magnitude=0.50),
+                Intervention("schedule_disruption", magnitude=0.80),
+            ],
+            cost_upfront=450_000, cost_annual=220_000, effort="high",
+        ),
+        Decision(
+            id="prerelease_validation",
+            title="Extend pre-release validation on your highest-volume line",
+            question="Should we add validation before launch rather than after?",
+            rationale=(
+                "Recalls are rare and enormous. Catching a defect before volume ships "
+                "moves both how often a campaign happens and how many units it covers."
+            ),
+            interventions=[Intervention("product_recall", frequency=0.60, magnitude=0.75)],
+            cost_upfront=0, cost_annual=380_000, effort="moderate",
+        ),
+        Decision(
+            id="commodity_hedge",
+            title="Hedge or contract your exposed commodity spend",
+            question="Should we fix input prices on committed volume?",
+            rationale=(
+                "You have to buy the material either way. Fixing the price narrows the "
+                "range of what it costs you, at the price of the upside."
+            ),
+            interventions=[Intervention("input_cost_shock", magnitude=0.55)],
+            cost_upfront=0, cost_annual=310_000, effort="moderate",
+        ),
+        Decision(
+            id="ot_segmentation",
+            title="Segment plant systems from corporate IT",
+            question="Should we isolate the network that runs the line?",
+            rationale=(
+                "Segmentation is what stops an office incident becoming a stopped line. "
+                "It cuts frequency of loss events and limits how far one spreads."
+            ),
+            interventions=[
+                Intervention("cyber_loss", frequency=0.60, magnitude=0.80),
+                Intervention("schedule_disruption", frequency=0.95),
+            ],
+            cost_upfront=260_000, cost_annual=120_000, effort="high",
+        ),
     ],
     vocabulary={"third_party": "supplier", "schedule": "production", "site": "plant"},
 )

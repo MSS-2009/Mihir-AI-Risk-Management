@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { assess, assessRobustness, type Assessment, type RobustnessResponse } from "@/lib/api";
+import { DecisionCard } from "@/components/dashboard/DecisionCard";
+import { ExposureWaterfall } from "@/components/dashboard/ExposureWaterfall";
 import { money, moneyCompact, pct } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { ErrorPanel, LoadingPanel } from "@/components/StatePanels";
@@ -28,7 +30,12 @@ export default function DashboardPage() {
       const id = ++robReq.current;
       setLoadingRob(true);
       assessRobustness({ industry, answers, eps: e })
-        .then((r) => id === robReq.current && setRob(r))
+        .then((r) => {
+          if (id !== robReq.current) return;
+          setRob(r);
+          // sensitivity and the narrative ride along with this deferred call
+          setData((prev) => (prev ? { ...prev, sensitivity: (r as any).sensitivity ?? prev.sensitivity, interpretation: (r as any).interpretation ?? prev.interpretation } : prev));
+        })
         .catch(() => {})
         .finally(() => id === robReq.current && setLoadingRob(false));
     },
@@ -127,6 +134,46 @@ export default function DashboardPage() {
 
       {data && (
         <div className={`mt-8 space-y-8 ${loading ? "opacity-60 transition-opacity" : ""}`}>
+          {/* THE LEAD: what to actually do, priced. */}
+          {data.decisions?.length > 0 && (
+            <section>
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <Eyebrow>Decisions on your desk</Eyebrow>
+                  <h2 className="mt-1 font-display text-2xl font-bold text-ink sm:text-3xl">
+                    What to fund, and what to leave alone
+                  </h2>
+                </div>
+                <p className="max-w-sm text-sm text-muted">
+                  Each option re-run through the same 50,000 scenarios with it in place, paired
+                  against the same years without it.
+                </p>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {data.decisions.map((d) => <DecisionCard key={d.id} d={d} />)}
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-rule bg-surface p-6 shadow-card">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <Eyebrow>If you act</Eyebrow>
+                    <h3 className="mt-1 font-display text-lg font-bold text-ink">
+                      Expected annual loss, before and after
+                    </h3>
+                  </div>
+                  <span className="font-mono text-[0.62rem] text-muted">
+                    only actions that pay for themselves are subtracted
+                  </span>
+                </div>
+                <div className="mt-5">
+                  <ExposureWaterfall baseline={data.expected_annual_loss} decisions={data.decisions} />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Supporting evidence below the decisions. */}
           <HeadlineBand a={data} r={rob} loadingRobustness={loadingRob} />
 
           <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
@@ -149,7 +196,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid gap-8 lg:grid-cols-2">
-            <Tornado rows={data.sensitivity} />
+            {data.sensitivity?.length ? <Tornado rows={data.sensitivity} /> : <div className="rounded-2xl border border-rule bg-surface p-6 shadow-card"><Eyebrow>Sensitivity</Eyebrow><p className="mt-3 text-sm text-muted">Measuring which assumption moves the answer...</p></div>}
             <Contributions data={data} />
           </div>
 
@@ -157,29 +204,7 @@ export default function DashboardPage() {
             <div>
               <Eyebrow>The read</Eyebrow>
               <h2 className="mt-1 font-display text-xl font-bold text-ink">What this means</h2>
-              <div className="mt-4"><InterpretationPanel text={data.interpretation} /></div>
-            </div>
-            <div>
-              <Eyebrow>Action</Eyebrow>
-              <h2 className="mt-1 font-display text-xl font-bold text-ink">Ranked by tail exposure</h2>
-              <div className="mt-4 space-y-3">
-                {data.recommendations.slice(0, 4).map((r) => (
-                  <div key={r.rank} className="rounded-xl border border-rule bg-surface p-4 shadow-card">
-                    <div className="flex items-start gap-3">
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/10 font-mono text-xs font-semibold text-brand">
-                        {r.rank}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="font-medium text-ink">{r.title}</div>
-                        <p className="mt-1 text-xs leading-relaxed text-muted">{r.rationale}</p>
-                        <div className="mt-2 font-mono text-[0.68rem] tabular-nums text-brand">
-                          {money(r.expected_annual_exposure)} expected · up to {money(r.tail_exposure_p95)} at P95
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <div className="mt-4">{data.interpretation ? <InterpretationPanel text={data.interpretation} /> : <div className="rounded-xl border border-rule bg-surface p-5 text-sm text-muted">Writing the read...</div>}</div>
             </div>
           </div>
 
