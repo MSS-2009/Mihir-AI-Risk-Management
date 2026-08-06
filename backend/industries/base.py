@@ -49,6 +49,8 @@ class Question:
     unit: str | None = None
     help: str | None = None
     choices: list[str] | None = None
+    fields: list[dict] | None = None      # for type == "entity_list"
+    group: str | None = None              # section heading in the intake UI
     # Modulation: which engine parameter this answer moves, and how.
     targets: list[str] = field(default_factory=list)   # engine ids
     rule: str | None = None              # modulation rule id, resolved in intake
@@ -67,6 +69,9 @@ class IndustryPack:
     # The levers an operator in this industry can actually pull. Data, like
     # everything else in a pack: engines never know what a decision is.
     decisions: list[Decision] = field(default_factory=list)
+    # Optional: turn the operator's own entities into engine parameters. A pack
+    # with one of these is "deep": it reads a real book rather than a percentage.
+    derive: object | None = None
     vocabulary: dict[str, str] = field(default_factory=dict)
     baseline_correlation: float = BASELINE_CORRELATION
 
@@ -142,6 +147,8 @@ class IndustryPack:
                     "unit": q.unit,
                     "help": q.help,
                     "choices": q.choices,
+                    "fields": q.fields,
+                    "group": q.group,
                     "targets": q.targets,
                     "rule": q.rule,
                     "context_only": q.context_only,

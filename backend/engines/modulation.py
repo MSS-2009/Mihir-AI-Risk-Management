@@ -196,7 +196,15 @@ def revenue_scale(answer, default) -> Modulation:
     return Modulation()
 
 
+def derived(answer, default) -> Modulation:
+    """Marker rule: this question feeds the derivation layer rather than a
+    multiplier. The industry computes the parameter change from the entities
+    themselves, which is what makes a deep pack deep."""
+    return Modulation()
+
+
 RULES: dict[str, Callable] = {
+    "derived": derived,
     "control_maturity": control_maturity,
     "process_maturity": process_maturity,
     "process_maturity_inverse": process_maturity_inverse,
@@ -214,6 +222,7 @@ RULES: dict[str, Callable] = {
 }
 
 RULE_DESCRIPTIONS = {
+    "derived": "Feeds the derivation layer: the parameter is computed from the entities you entered, not from a multiplier.",
     "control_maturity": "Stronger controls lower how often an incident becomes a loss event. Frequency only.",
     "process_maturity": "A systematic process catches failures earlier: lower frequency, and smaller when they happen.",
     "process_maturity_inverse": "More restrictive obligations create more ways to breach them.",

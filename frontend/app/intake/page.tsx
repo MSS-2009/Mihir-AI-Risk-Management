@@ -7,6 +7,7 @@ import { money, pct } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { ErrorPanel, LoadingPanel } from "@/components/StatePanels";
 import { Eyebrow } from "@/components/ui";
+import { EntityTable } from "@/components/EntityTable";
 
 /**
  * The questionnaire. Every question states which model it moves, because a
@@ -74,9 +75,24 @@ export default function IntakePage() {
 
       {pack && (
         <>
-          <div className="mt-10 grid gap-x-10 gap-y-7 lg:grid-cols-2">
-            {pack.questions.map((q) => (
-              <QuestionField key={q.id} q={q} value={local[q.id]} onChange={(v) => set(q.id, v)} pack={pack} />
+          <div className="mt-10 space-y-10">
+            {Object.entries(
+              pack.questions.reduce((acc: Record<string, typeof pack.questions>, q) => {
+                const g = q.group || "Your operation";
+                (acc[g] ||= []).push(q);
+                return acc;
+              }, {})
+            ).map(([group, qs]) => (
+              <section key={group}>
+                <h2 className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-brand">{group}</h2>
+                <div className="mt-4 grid gap-x-10 gap-y-7 lg:grid-cols-2">
+                  {qs.map((q) => (
+                    <div key={q.id} className={q.type === "entity_list" ? "lg:col-span-2" : ""}>
+                      <QuestionField q={q} value={local[q.id]} onChange={(v) => set(q.id, v)} pack={pack} />
+                    </div>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
 
@@ -164,6 +180,17 @@ function QuestionField({
               className="w-full bg-transparent px-3 py-2 font-mono text-sm tabular-nums text-ink outline-none"
             />
             {q.unit && <span className="pr-3 font-mono text-xs text-muted">{q.unit}</span>}
+          </div>
+        )}
+
+        {q.type === "entity_list" && (
+          <div className="mt-3">
+            <EntityTable
+              rows={(value as any[]) || []}
+              fields={(q.fields as any) || []}
+              onChange={onChange}
+              addLabel={q.label.toLowerCase()}
+            />
           </div>
         )}
 

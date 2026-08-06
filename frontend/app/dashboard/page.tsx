@@ -22,6 +22,9 @@ export default function DashboardPage() {
   const [loadingRob, setLoadingRob] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eps, setEps] = useState(0.1);
+  // What the reader actually gets. Choosing one HIDES the others: showing every
+  // format at once is the information overload this control exists to prevent.
+  const [view, setView] = useState<"summary" | "onepager" | "full">("summary");
   const robReq = useRef(0);
 
   const loadRobustness = useCallback(
@@ -93,7 +96,25 @@ export default function DashboardPage() {
           </h1>
         </div>
         {data && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-lg border border-rule bg-surface p-0.5">
+              {([
+                ["summary", "Executive summary"],
+                ["onepager", "One-pager"],
+                ["full", "Full analysis"],
+              ] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                    view === v ? "bg-brand text-white" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <Link href="/intake" className="link-underline text-sm text-muted">Adjust answers</Link>
             <button
               onClick={run}
@@ -134,8 +155,10 @@ export default function DashboardPage() {
 
       {data && (
         <div className={`mt-8 space-y-8 ${loading ? "opacity-60 transition-opacity" : ""}`}>
+          {view === "summary" && <ExecutiveSummary a={data} r={rob} />}
+
           {/* THE LEAD: what to actually do, priced. */}
-          {data.decisions?.length > 0 && (
+          {view !== "summary" && data.decisions?.length > 0 && (
             <section>
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
@@ -174,9 +197,9 @@ export default function DashboardPage() {
           )}
 
           {/* Supporting evidence below the decisions. */}
-          <HeadlineBand a={data} r={rob} loadingRobustness={loadingRob} />
+          {view === "full" && <HeadlineBand a={data} r={rob} loadingRobustness={loadingRob} />}
 
-          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+          {view === "full" && <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="rounded-2xl border border-rule bg-surface p-6 shadow-card">
               <Eyebrow>Loss exceedance</Eyebrow>
               <h2 className="mt-1 font-display text-xl font-bold text-ink">How bad it gets, by percentile</h2>
@@ -193,24 +216,91 @@ export default function DashboardPage() {
             </div>
 
             <FragilityPanel r={rob} loading={loadingRob} eps={eps} onEps={onEps} />
-          </div>
+          </div>}
 
-          <div className="grid gap-8 lg:grid-cols-2">
+          {view === "full" && <div className="grid gap-8 lg:grid-cols-2">
             {data.sensitivity?.length ? <Tornado rows={data.sensitivity} /> : <div className="rounded-2xl border border-rule bg-surface p-6 shadow-card"><Eyebrow>Sensitivity</Eyebrow><p className="mt-3 text-sm text-muted">Measuring which assumption moves the answer...</p></div>}
             <Contributions data={data} />
-          </div>
+          </div>}
 
-          <div className="grid gap-8 lg:grid-cols-2">
+          {view !== "summary" && <div className="grid gap-8 lg:grid-cols-2">
             <div>
               <Eyebrow>The read</Eyebrow>
               <h2 className="mt-1 font-display text-xl font-bold text-ink">What this means</h2>
               <div className="mt-4">{data.interpretation ? <InterpretationPanel text={data.interpretation} /> : <div className="rounded-xl border border-rule bg-surface p-5 text-sm text-muted">Writing the read...</div>}</div>
             </div>
-          </div>
+          </div>}
 
-          <ModelConfiguration data={data} />
+          {view === "full" && <ModelConfiguration data={data} />}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Executive summary: one call, one number, one caveat. Nothing else. */
+function ExecutiveSummary({ a, r }: { a: Assessment; r: RobustnessResponse | null }) {
+  const top = a.decisions?.[0];
+  const worth = (a.decisions || []).filter((d) => d.npv > 0);
+  const P = Object.fromEntries(a.exceedance_curve.map((e) => [e.percentile, e.loss]));
+  return (
+    <div className="rounded-2xl border border-rule bg-surface p-8 shadow-card sm:p-10">
+      <Eyebrow>{a.industry_name} · executive summary</Eyebrow>
+
+      {top && (
+        <p className="thesis mt-4 max-w-3xl text-2xl leading-snug text-ink sm:text-3xl">
+          {worth.length > 0 ? (
+            <>
+              Fund <span className="text-brand">{top.title.toLowerCase()}</span>. It returns{" "}
+              <span className="text-emerald">{money(top.npv)}</span> over three years and is worth
+              doing in {pct(top.prob_beneficial)} of scenarios.
+            </>
+          ) : (
+            <>
+              None of the {a.decisions.length} actions we priced pays for itself at current
+              estimates. Your exposure is cheaper to carry than to remove.
+            </>
+          )}
+        </p>
+      )}
+
+      <div className="mt-8 grid gap-6 border-t border-rule pt-6 sm:grid-cols-3">
+        <div>
+          <div className="eyebrow">Expected annual loss</div>
+          <div className="mt-1 font-display text-3xl font-bold tabular-nums text-ink">
+            {money(a.expected_annual_loss)}
+          </div>
+          {a.expected_annual_loss_pct_revenue && (
+            <div className="mt-0.5 font-mono text-[0.66rem] text-muted">
+              {pct(a.expected_annual_loss_pct_revenue, 2)} of revenue
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="eyebrow">Plan against · P99</div>
+          <div className="mt-1 font-display text-3xl font-bold tabular-nums text-brand">
+            {money(P[99])}
+          </div>
+          <div className="mt-0.5 font-mono text-[0.66rem] text-muted">
+            {r ? `range ${moneyCompact(r.robustness.p99_low)} to ${moneyCompact(r.robustness.p99_high)}` : "measuring the range..."}
+          </div>
+        </div>
+        <div>
+          <div className="eyebrow">Actions worth funding</div>
+          <div className="mt-1 font-display text-3xl font-bold tabular-nums text-ink">
+            {worth.length} of {a.decisions?.length ?? 0}
+          </div>
+          <div className="mt-0.5 font-mono text-[0.66rem] text-muted">
+            {money(worth.reduce((s, d) => s + d.npv, 0))} combined NPV
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-6 border-t border-rule pt-4 text-xs leading-relaxed text-muted">
+        Every figure is a seeded simulation over {a.n_sims.toLocaleString("en-US")} scenarios and
+        carries a range. Parameters are starting estimates you can edit. Switch to One-pager or Full
+        analysis above for the workings.
+      </p>
     </div>
   );
 }

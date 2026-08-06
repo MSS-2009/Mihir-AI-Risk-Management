@@ -75,7 +75,10 @@ def test_intake_answers_actually_move_the_model():
     """A questionnaire whose answers change nothing would be theatre."""
     for industry, pack in INDUSTRY_REGISTRY.items():
         base = run_assessment(industry, interpret=False, include_sensitivity=False)
-        neutral = {q.id: q.default for q in pack.questions}
+        # Modulation questions only. A derived question has no neutral answer:
+        # its parameter is computed from the entities themselves rather than
+        # multiplied around a default, so it is covered by the test below.
+        neutral = {q.id: q.default for q in pack.questions if q.rule != "derived"}
         same = run_assessment(industry, answers=neutral, interpret=False, include_sensitivity=False)
         # accepting every default reproduces the published calibration exactly
         assert same["expected_annual_loss"] == base["expected_annual_loss"], industry
@@ -91,6 +94,48 @@ def test_intake_answers_actually_move_the_model():
             alt = run_assessment(industry, answers=moved, interpret=False, include_sensitivity=False)
             assert alt["expected_annual_loss"] != base["expected_annual_loss"], industry
             assert alt["intake_adjustments"], industry
+
+
+def test_derivation_layer_computes_from_the_operators_own_book():
+    """The point of a deep pack: parameters come from the entities the operator
+    entered, not from a multiplier they had to estimate themselves.
+
+    Anything less and the pack is a generic calculator wearing an industry hat.
+    """
+    pack = INDUSTRY_REGISTRY["industrial_distribution"]
+    derived_qs = [q for q in pack.questions if q.rule == "derived"]
+    assert derived_qs, "the deep pack must have derived questions"
+
+    base = run_assessment("industrial_distribution", interpret=False, include_sensitivity=False)
+    answers = {q.id: q.default for q in pack.questions}
+    deep = run_assessment("industrial_distribution", answers=answers,
+                          interpret=False, include_sensitivity=False)
+
+    # entities move the model, and by more than a rounding wobble
+    assert deep["expected_annual_loss"] != base["expected_annual_loss"]
+    assert abs(deep["expected_annual_loss"] / base["expected_annual_loss"] - 1) > 0.10
+
+    # the derivation is reported, so a CFO can audit where the number came from
+    facts = deep.get("derived_facts") or {}
+    for key in ("hhi", "top_vendor", "sole_source_share", "annual_duty_cost",
+                "blended_duty_rate", "weighted_days_of_cover", "top_site"):
+        assert key in facts, key
+
+    # and it is arithmetic on their book, not an opaque adjustment
+    assert facts["annual_duty_cost"] > 0
+    assert 0 < facts["hhi"] <= 1.0
+    assert facts["top_vendor"] == "Jiangsu Machine Works"
+
+    # decisions name the operator's own vendor and site rather than a placeholder
+    titles = " | ".join(d["title"] for d in deep["decisions"])
+    assert facts["top_vendor"] in titles
+    assert facts["top_site"] in titles
+    assert "{" not in titles, "an unfilled template leaked into a decision title"
+
+    # deriving twice from the same book gives the same book
+    again = run_assessment("industrial_distribution", answers=answers,
+                           interpret=False, include_sensitivity=False)
+    assert again["expected_annual_loss"] == deep["expected_annual_loss"]
 
 
 def test_assessment_deterministic_without_key():

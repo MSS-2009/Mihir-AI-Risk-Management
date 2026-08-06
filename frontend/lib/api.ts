@@ -62,6 +62,8 @@ export interface Question {
   unit?: string | null;
   help?: string | null;
   choices?: string[] | null;
+  fields?: { name: string; label: string; type: string; unit?: string; choices?: string[] }[] | null;
+  group?: string | null;
   targets: string[];
   rule?: string | null;
   context_only: boolean;
@@ -145,6 +147,7 @@ export interface Assessment {
   domain_contributions: DomainContribution[];
   sensitivity: SensitivityRow[];
   decisions: PricedDecision[];
+  derived_facts: Record<string, any>;
   intake_adjustments: IntakeAdjustment[];
   interpretation: string;
   recommendations: {
