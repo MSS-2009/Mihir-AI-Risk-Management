@@ -80,8 +80,8 @@ export default function IntakePage() {
               vendor book that already exists in their purchase orders. */}
           <div className="mt-8">
             <DocumentPrefill
+              industry={pack.id}
               questions={pack.questions}
-              currentAnswers={local}
               onApply={(patch) => setLocal((s) => ({ ...s, ...patch }))}
             />
           </div>

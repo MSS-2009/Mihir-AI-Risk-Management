@@ -1,10 +1,26 @@
 """Document completeness checklist.
 
-Defines the trade documents an industrial-equipment-distributor risk assessment
-draws on, what each one unlocks, and how the assessment degrades when one is
-missing. The checklist tells the user exactly what to add and why.
+Which paperwork a risk assessment draws on, what each one unlocks, and how the
+assessment degrades when one is missing. The list is per industry: a CRO should
+be asked for protocols and enrollment reports, not bills of lading.
 """
 from __future__ import annotations
+
+from .profiles import get_profile
+
+
+def docs_for(industry: str | None) -> list[dict]:
+    """The document set this industry actually has."""
+    return [
+        {
+            "id": d.id,
+            "name": d.name,
+            "description": d.description,
+            "unlocks": d.unlocks,
+            "required": d.required,
+        }
+        for d in get_profile(industry).doc_types
+    ]
 
 # id, name, description, unlocks (model keys), required
 REQUIRED_DOCS = [
@@ -69,12 +85,12 @@ REQUIRED_DOCS = [
 _BY_ID = {d["id"]: d for d in REQUIRED_DOCS}
 
 
-def build_checklist(detected_ids: list[str]) -> list[dict]:
+def build_checklist(detected_ids: list[str], industry: str | None = None) -> list[dict]:
     """For each expected document, whether it's present and what its absence
     costs the assessment."""
     detected = set(detected_ids)
     out = []
-    for d in REQUIRED_DOCS:
+    for d in docs_for(industry):
         present = d["id"] in detected
         out.append({
             **d,
@@ -88,9 +104,9 @@ def build_checklist(detected_ids: list[str]) -> list[dict]:
     return out
 
 
-def coverage(detected_ids: list[str]) -> dict:
+def coverage(detected_ids: list[str], industry: str | None = None) -> dict:
     detected = set(detected_ids)
-    required = [d for d in REQUIRED_DOCS if d["required"]]
+    required = [d for d in docs_for(industry) if d["required"]]
     have = [d for d in required if d["id"] in detected]
     return {
         "required_total": len(required),

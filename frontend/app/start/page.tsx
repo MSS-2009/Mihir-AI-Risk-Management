@@ -93,10 +93,7 @@ export default function StartPage() {
                   ))}
                 </ul>
 
-                <div className="mt-5 flex items-center justify-between border-t border-rule pt-3 font-mono text-[0.66rem] text-muted">
-                  <span className="tnum">
-                    {pack.engines.length} models · {pack.questions.length} questions
-                  </span>
+                <div className="mt-5 flex items-center justify-end border-t border-rule pt-3 font-mono text-[0.66rem]">
                   <span className="text-brand opacity-0 transition-opacity group-hover:opacity-100">
                     Start →
                   </span>

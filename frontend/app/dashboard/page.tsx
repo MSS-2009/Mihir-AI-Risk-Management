@@ -256,6 +256,18 @@ export default function DashboardPage() {
 }
 
 /** Executive summary: one call, one number, one caveat. Nothing else. */
+/**
+ * The annual cost at which a decision breaks even, from the same affine
+ * relationship the cards reprice with. "Nothing is worth funding" is an honest
+ * answer but a dead end; the price that would change it is the useful part, and
+ * it is the number a buyer argues with.
+ */
+function breakEven(d: PricedDecision): number {
+  const a = d.annuity_factor;
+  if (!a) return 0;
+  return d.expected_saving_annual - d.cost_upfront / a;
+}
+
 function ExecutiveSummary({
   a, r, decisions,
 }: {
@@ -280,6 +292,13 @@ function ExecutiveSummary({
             <>
               None of the {decisions.length} actions we priced pays for itself at current
               estimates. Your exposure is cheaper to carry than to remove.
+              {top && breakEven(top) > 0 && (
+                <span className="text-muted">
+                  {" "}The closest is <span className="text-brand">{top.title}</span>,
+                  which turns positive below {money(breakEven(top))} a year. Edit the cost on any
+                  card if ours is wrong.
+                </span>
+              )}
             </>
           )}
         </p>

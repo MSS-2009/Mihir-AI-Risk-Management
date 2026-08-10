@@ -1,38 +1,34 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { uploadDocuments, type Question } from "@/lib/api";
-import { buildPrefill, withDefaults, type PrefillResult } from "@/lib/prefill";
-import { money } from "@/lib/format";
+import { uploadDocuments, type DocumentsResponse, type Question } from "@/lib/api";
 
 /**
  * Upload the paperwork instead of retyping it.
  *
- * A large operator has the vendor book already, in purchase orders, invoices
- * and customs entries. Asking them to retype it into a table is the single
- * most likely reason they abandon intake, so this sits at the top of the form
- * rather than on a separate page they have to find.
+ * A large operator has the book already, in whatever their industry calls
+ * paperwork: purchase orders for a distributor, protocols and enrollment
+ * reports for a CRO. Asking them to retype it is the single most likely reason
+ * they abandon intake, so this sits at the top of the form.
  *
- * What it does NOT do is quietly overwrite their work. Extraction is
- * best-effort, so the panel shows exactly what it found, names the tables it
- * would fill, and requires an explicit click. Every filled row lands in an
- * editable table.
+ * The reading is done server-side because the industry decides what a document
+ * even is. The panel's job is to show what came back, name the tables it could
+ * not fill and why, and require an explicit click before anything is replaced.
  */
 export function DocumentPrefill({
+  industry,
   questions,
   onApply,
-  currentAnswers,
 }: {
+  industry: string;
   questions: Question[];
   onApply: (patch: Record<string, any[]>) => void;
-  currentAnswers: Record<string, any>;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<PrefillResult | null>(null);
+  const [res, setRes] = useState<DocumentsResponse | null>(null);
   const [applied, setApplied] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(true);
   const [names, setNames] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -45,9 +41,7 @@ export function DocumentPrefill({
     setApplied(false);
     setNames(Array.from(files).map((f) => f.name));
     try {
-      const res = await uploadDocuments(Array.from(files));
-      setAiEnabled(res.ai_enabled !== false);
-      setResult(buildPrefill(questions, (res.documents || []) as any));
+      setRes(await uploadDocuments(Array.from(files), industry));
     } catch (e: any) {
       setError(e.message || "Upload failed.");
     } finally {
@@ -56,19 +50,21 @@ export function DocumentPrefill({
   };
 
   const apply = () => {
-    if (!result) return;
+    const prefill = res?.prefill;
+    if (!prefill) return;
     const patch: Record<string, any[]> = {};
-    for (const q of entityQs) {
-      const found = result.rows[q.id];
-      if (!found?.length) continue;
-      patch[q.id] = found.map((r) => withDefaults(r, q.fields as any, q.default as any[]));
+    for (const [qid, table] of Object.entries(prefill)) {
+      if (table.rows?.length) patch[qid] = table.rows;
     }
     onApply(patch);
     setApplied(true);
   };
 
-  const fillable = result ? Object.keys(result.rows) : [];
-  const totalRows = result ? Object.values(result.rows).reduce((n, r) => n + r.length, 0) : 0;
+  const prefill = res?.prefill || {};
+  const totalRows = Object.values(prefill).reduce((n, t) => n + (t.rows?.length || 0), 0);
+  const unevidenced = Array.from(
+    new Set(Object.values(prefill).flatMap((t) => t.unevidenced || []))
+  );
 
   return (
     <div className="rounded-2xl border border-rule bg-raised/40 p-5">
@@ -78,9 +74,8 @@ export function DocumentPrefill({
             Have the paperwork already? Upload it instead.
           </h2>
           <p className="mt-1 max-w-xl text-sm text-muted">
-            Purchase orders, invoices, customs entries, packing lists or a CSV export. We read the
-            counterparty, value, origin, HS code and lead time out of them and fill the tables below,
-            so you correct a draft rather than type one.
+            We read the documents your industry actually keeps and fill the tables below, so you
+            correct a draft rather than type one.
           </p>
         </div>
         <button
@@ -104,12 +99,12 @@ export function DocumentPrefill({
 
       {open && (
         <div className="mt-4 border-t border-rule pt-4">
-          {!result && !busy && !error && (
+          {!res && !busy && !error && (
             <button
               onClick={() => inputRef.current?.click()}
               className="w-full rounded-xl border border-dashed border-rule px-4 py-6 text-sm text-muted transition-colors hover:border-brand hover:text-brand"
             >
-              Choose files, or drop them on this panel. PDF, CSV or text.
+              Choose files. PDF, CSV or text.
             </button>
           )}
 
@@ -125,36 +120,50 @@ export function DocumentPrefill({
             </div>
           )}
 
-          {result && !busy && (
+          {res && !busy && (
             <div className="space-y-3">
               <p className="text-sm text-ink">
-                Read {result.documentCount} document{result.documentCount === 1 ? "" : "s"} and found{" "}
-                <span className="font-semibold text-brand">{result.supplierCount}</span> named
-                {result.supplierCount === 1 ? " counterparty" : " counterparties"}
-                {totalRows > 0 && <>, enough to fill <span className="font-semibold">{totalRows}</span> rows.</>}
-                {totalRows === 0 && <>, but not enough figures to fill a table.</>}
+                Read {res.documents?.length ?? 0} document
+                {(res.documents?.length ?? 0) === 1 ? "" : "s"}
+                {totalRows > 0
+                  ? <>, enough to fill <span className="font-semibold text-brand">{totalRows}</span> rows.</>
+                  : <>, but nothing in them fills a table.</>}
               </p>
 
-              <ul className="space-y-1">
+              {/* What each document was taken to be, so a wrong read is visible. */}
+              {!!res.documents?.length && (
+                <ul className="space-y-0.5">
+                  {res.documents.map((d) => (
+                    <li key={d.filename} className="flex flex-wrap items-baseline gap-2 font-mono text-[0.62rem]">
+                      <span className="text-muted">{d.filename}</span>
+                      <span className="text-ink">{String(d.doc_type || "unclassified").replace(/_/g, " ")}</span>
+                      {typeof d.confidence === "number" && (
+                        <span className="text-muted">{Math.round(d.confidence * 100)}% confident</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <ul className="space-y-1 border-t border-rule pt-2">
                 {entityQs.map((q) => {
-                  const found = result.rows[q.id];
+                  const t = prefill[q.id];
                   return (
                     <li key={q.id} className="flex items-baseline gap-2 font-mono text-[0.68rem]">
-                      <span className={found ? "text-emerald" : "text-muted"}>{found ? "●" : "○"}</span>
+                      <span className={t ? "text-emerald" : "text-muted"}>{t ? "●" : "○"}</span>
                       <span className="text-ink">{q.label}</span>
                       <span className="text-muted">
-                        {found ? `${found.length} row${found.length === 1 ? "" : "s"}` : result.skipped[q.id]}
+                        {t ? `${t.rows.length} row${t.rows.length === 1 ? "" : "s"}` : res.skipped?.[q.id]}
                       </span>
                     </li>
                   );
                 })}
               </ul>
 
-              {!aiEnabled && (
+              {res.ai_enabled === false && (
                 <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-xs text-ink">
                   Running without an extraction key, so classification fell back to filename and
-                  keyword matching and most fields will be blank. The figures below are the pack
-                  defaults, not your documents.
+                  keyword matching and most fields will be blank.
                 </p>
               )}
 
@@ -173,11 +182,17 @@ export function DocumentPrefill({
                 </div>
               )}
 
+              {unevidenced.length > 0 && (
+                <p className="font-mono text-[0.6rem] leading-relaxed text-amber">
+                  Not stated in your documents, so these kept this industry&apos;s default and are worth
+                  checking: {unevidenced.join(", ")}.
+                </p>
+              )}
+
               <p className="border-t border-rule pt-2 font-mono text-[0.6rem] leading-relaxed text-muted">
-                Extraction is best-effort and columns a document cannot evidence keep the pack
-                default, so check the tables before you run. Files are held in memory for the
-                request and never written to disk; document text is sent to the Anthropic API to
-                be classified and read.{" "}
+                Extraction is best-effort, so check the tables before you run. Files are held in
+                memory for the request and never written to disk; document text is sent to the
+                Anthropic API to be classified and read.{" "}
                 <Link href="/upload" className="link-underline text-brand">
                   Full document checklist
                 </Link>

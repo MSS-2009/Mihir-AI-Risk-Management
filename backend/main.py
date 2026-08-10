@@ -8,13 +8,14 @@ Run:  uvicorn main:app --port 8000
 """
 from typing import Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from assessment import run_assessment, run_robustness
 from documents import REQUIRED_DOCS, build_checklist, ingest_files, scan_signals
-from documents.checklist import coverage
+from documents.checklist import coverage, docs_for
+from documents.prefill import build_prefill
 from engines.constants import DEFAULT_SEED, N_SIMS, N_SIMS_SWEEP
 from engines.modulation import RULE_DESCRIPTIONS
 from engines.registry import engines_public
@@ -210,23 +211,41 @@ def analyze(req: AnalyzeRequest):
 
 
 @app.get("/documents/checklist")
-def documents_checklist():
-    return {"checklist": build_checklist([]), "coverage": coverage([]), "required_docs": REQUIRED_DOCS}
+def documents_checklist(industry: str | None = None):
+    """The paperwork THIS industry has. A CRO is asked for protocols and
+    enrollment reports, not bills of lading."""
+    return {
+        "checklist": build_checklist([], industry),
+        "coverage": coverage([], industry),
+        "required_docs": docs_for(industry),
+        "industry": industry,
+    }
 
 
 @app.post("/documents")
-async def upload_documents(files: list[UploadFile] = File(...)):
-    """Optional intake pre-fill. Extracted values are always returned for the
-    user to confirm before anything runs."""
+async def upload_documents(
+    files: list[UploadFile] = File(...),
+    industry: str | None = Form(None),
+):
+    """Optional intake pre-fill, read through the industry's own lens.
+
+    Classification, the fields worth extracting, and the tables they fill all
+    come from the industry profile. Extracted values are always returned for the
+    user to confirm before anything runs.
+    """
     payload = [(f.filename or "upload", await f.read()) for f in files]
-    ingested = ingest_files(payload)
+    ingested = ingest_files(payload, industry)
     extracts = [{**d["fields"], "doc_type": d["doc_type"]} for d in ingested["documents"]]
     detected = ingested["detected_doc_ids"]
-    return {
+    out = {
         "documents": ingested["documents"],
-        "checklist": build_checklist(detected),
-        "coverage": coverage(detected),
+        "checklist": build_checklist(detected, industry),
+        "coverage": coverage(detected, industry),
         "extracted_params": ingested["extracted_params"],
         "signals": scan_signals(extracts),
         "ai_enabled": ai_enabled(),
+        "industry": industry,
     }
+    if industry and industry in INDUSTRY_REGISTRY:
+        out.update(build_prefill(industry, ingested["documents"], INDUSTRY_REGISTRY[industry]))
+    return out

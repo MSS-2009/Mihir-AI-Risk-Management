@@ -294,11 +294,14 @@ export interface AnalyzeResponse {
 }
 
 // ---- documents (secondary path: optional intake pre-fill) ----
-export const getDocumentChecklist = () => req<DocumentsResponse>("/documents/checklist");
+export const getDocumentChecklist = (industry?: string) =>
+  req<DocumentsResponse>(`/documents/checklist${industry ? `?industry=${encodeURIComponent(industry)}` : ""}`);
 
-export async function uploadDocuments(files: File[]): Promise<DocumentsResponse> {
+/** The industry decides how a document is read, so it travels with the upload. */
+export async function uploadDocuments(files: File[], industry?: string): Promise<DocumentsResponse> {
   const fd = new FormData();
   files.forEach((f) => fd.append("files", f));
+  if (industry) fd.append("industry", industry);
   let res: Response;
   try {
     res = await fetch(`${API_URL}/documents`, { method: "POST", body: fd });
@@ -339,4 +342,18 @@ export interface DocumentsResponse {
   };
   required_docs?: unknown[];
   ai_enabled?: boolean;
+  industry?: string | null;
+  /** Rows the documents can fill, keyed by the pack's entity question id. */
+  prefill?: Record<string, PrefillTable>;
+  /** Tables the documents could not speak to, and why. */
+  skipped?: Record<string, string>;
+  profile?: string;
+  note?: string;
+}
+
+export interface PrefillTable {
+  label: string;
+  rows: Record<string, any>[];
+  /** Columns no document evidenced, which kept the pack default. */
+  unevidenced: string[];
 }
