@@ -1,4 +1,23 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+/**
+ * Where the engine lives.
+ *
+ * The fallback used to be plain localhost, which is the worst possible default
+ * for a deployed page: the site works for whoever happens to be running the
+ * backend on their own machine and is silently broken for everyone else. A page
+ * served from a real host never falls back to localhost now.
+ */
+const PRODUCTION_API = "https://avenoir-api.onrender.com";
+
+function resolveApiUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  const servedLocally =
+    typeof window === "undefined" ||
+    ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname);
+  if (configured && (servedLocally || !configured.includes("localhost"))) return configured;
+  return servedLocally ? "http://localhost:8000" : PRODUCTION_API;
+}
+
+const API_URL = resolveApiUrl();
 
 export class ApiError extends Error {
   status: number;
