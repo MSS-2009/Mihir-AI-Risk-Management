@@ -108,6 +108,8 @@ export interface AssessRequest {
   seed?: number;
   /** {decision_id: {cost_upfront, cost_annual}} in the dollars shown on screen. */
   decision_costs?: Record<string, { cost_upfront?: number; cost_annual?: number }>;
+  /** "sme" | "midmarket": run against a deterministic fake connected customer. */
+  demo_connection?: string | null;
 }
 
 export interface DomainContribution {
@@ -183,6 +185,8 @@ export interface Assessment {
     rationale: string;
   }[];
   vocabulary: Record<string, string>;
+  /** Present only when the assessment ran against connected data. */
+  estimation: Estimation | null;
   assumptions: {
     domains: any[];
     correlation_matrix: { keys: string[]; labels: string[]; matrix: number[][]; repaired: boolean };
@@ -194,6 +198,55 @@ export interface Assessment {
     intake_adjustments?: IntakeAdjustment[];
     [k: string]: any;
   };
+}
+
+/** Where a parameter's value came from, and how much of it is the customer's. */
+export interface ParameterProvenance {
+  engine: string;
+  parameter: "frequency" | "magnitude" | string;
+  provenance: "measured" | "blended" | "prior";
+  n_observations: number;
+  window_years: number;
+  weight_on_data: number;
+  credible_interval: [number, number] | null;
+  source: string;
+  reason: string;
+  snapshot_id: string;
+  prior_value: number | null;
+  value: number | null;
+}
+
+export interface Estimation {
+  coverage: {
+    measured: number;
+    blended: number;
+    prior: number;
+    total: number;
+    measured_share: number;
+    /** What connecting more would unlock, in the customer's words. */
+    unlocks: string[];
+  };
+  parameters: ParameterProvenance[];
+  observations: {
+    engine: string;
+    n_events: number;
+    years_observed: number;
+    n_losses: number;
+    source: string;
+    available: boolean;
+    reason: string;
+  }[];
+  snapshot: {
+    snapshot_id: string;
+    taken_at: string;
+    source: string;
+    window_start: string | null;
+    window_end: string | null;
+    window_years: number;
+    completeness: Record<string, string>;
+    record_counts: Record<string, number>;
+  } | null;
+  basis: string;
 }
 
 export interface PricedDecision {

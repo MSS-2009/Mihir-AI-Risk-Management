@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from assessment import run_assessment, run_robustness
+from connectors import PROFILES, FixtureProvider
 from documents import REQUIRED_DOCS, build_checklist, ingest_files, scan_signals
 from documents.checklist import coverage, docs_for
 from documents.prefill import build_prefill
@@ -43,6 +44,11 @@ class AssessRequest(BaseModel):
     # operator sees on screen. Sending these back makes an edited run
     # reproducible rather than something that only existed in one browser tab.
     decision_costs: Optional[dict] = None
+    # Run against a deterministic fake customer instead of a live connection:
+    # "sme" for a QuickBooks-grade book, "midmarket" for a NetSuite-grade one.
+    # The estimator is demonstrable before anyone has linked an account, which
+    # is when the first conversations actually happen.
+    demo_connection: Optional[str] = None
 
 
 class RobustnessRequest(AssessRequest):
@@ -158,6 +164,15 @@ def list_models():
     }
 
 
+def _demo_book(profile: str | None, industry: str):
+    """A deterministic fake customer, or None for the unconnected path."""
+    if not profile:
+        return None
+    if profile not in PROFILES:
+        raise HTTPException(400, f"unknown demo connection '{profile}'")
+    return FixtureProvider(profile=profile).build(industry_pack=industry)
+
+
 @app.post("/assess")
 def assess(req: AssessRequest):
     """Composite risk for one industry, plus the sensitivity tornado."""
@@ -170,6 +185,7 @@ def assess(req: AssessRequest):
         alpha=req.alpha,
         seed=req.seed,
         decision_costs=req.decision_costs,
+        book=_demo_book(req.demo_connection, req.industry),
     )
 
 
@@ -186,6 +202,7 @@ def assess_robustness(req: RobustnessRequest):
         alpha=req.alpha,
         eps=req.eps,
         seed=req.seed,
+        book=_demo_book(req.demo_connection, req.industry),
     )
     # Sensitivity and the narrative ride along with the deferred call so the
     # decision view paints fast.

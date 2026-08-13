@@ -12,6 +12,7 @@ import { InterpretationPanel } from "@/components/InterpretationPanel";
 import { ExceedanceCurve } from "@/components/charts/ExceedanceCurve";
 import { HeadlineBand } from "@/components/dashboard/HeadlineBand";
 import { FragilityPanel } from "@/components/dashboard/FragilityPanel";
+import { ProvenancePanel } from "@/components/dashboard/ProvenancePanel";
 import { Eyebrow } from "@/components/ui";
 
 export default function DashboardPage() {
@@ -29,6 +30,9 @@ export default function DashboardPage() {
   // What the operator says each action costs THEM. Sent back on a re-run so an
   // edited assessment is reproducible, not something that lived in one tab.
   const [costs, setCosts] = useState<Record<string, CostOverride>>({});
+  // Which connected book to run against. Null is the unconnected path, which is
+  // byte-for-byte the v2 assessment.
+  const [connection, setConnection] = useState<string | null>(null);
   const robReq = useRef(0);
 
   const loadRobustness = useCallback(
@@ -55,7 +59,7 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     setRob(null);
-    assess({ industry, answers, decision_costs: costs })
+    assess({ industry, answers, decision_costs: costs, demo_connection: connection })
       .then((a) => {
         setData(a);
         // The dependence sweep is ~90 simulations, so it loads after the
@@ -64,7 +68,7 @@ export default function DashboardPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [industry, answers, eps, costs, loadRobustness]);
+  }, [industry, answers, eps, costs, connection, loadRobustness]);
 
   useEffect(() => {
     if (!ready) return;
@@ -123,6 +127,16 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
+            <select
+              value={connection ?? ""}
+              onChange={(e) => setConnection(e.target.value || null)}
+              aria-label="Connected data source"
+              className="rounded-lg border border-rule bg-surface px-2.5 py-1.5 text-xs text-ink outline-none focus:border-brand"
+            >
+              <option value="">Not connected</option>
+              <option value="sme">Demo: QuickBooks-grade</option>
+              <option value="midmarket">Demo: NetSuite-grade</option>
+            </select>
             <Link href="/intake" className="link-underline text-sm text-muted">Adjust answers</Link>
             <button
               onClick={run}
@@ -164,6 +178,8 @@ export default function DashboardPage() {
       {data && (
         <div className={`mt-8 space-y-8 ${loading ? "opacity-60 transition-opacity" : ""}`}>
           {view === "summary" && <ExecutiveSummary a={data} r={rob} decisions={decisions} />}
+
+          {data.estimation && <ProvenancePanel e={data.estimation} />}
 
           {/* THE LEAD: what to actually do, priced. */}
           {view !== "summary" && data.decisions?.length > 0 && (
