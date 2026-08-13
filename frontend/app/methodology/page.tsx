@@ -165,6 +165,104 @@ export default function MethodologyPage() {
             </section>
           )}
 
+          {/* How a published estimate becomes a measurement. This is the
+              section a technical evaluator reads first, so it states the
+              shrinkage plainly rather than gesturing at Bayes. */}
+          <section>
+            <h2 className="font-display text-2xl font-bold text-ink">
+              How your own history replaces our estimate
+            </h2>
+            <p className="mt-3 max-w-3xl leading-relaxed text-muted">
+              Connect an accounting or ERP system and some parameters stop being our published
+              judgment and start being estimated from what has actually happened to you. Not all
+              of them, and the interface says which.
+            </p>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <Card className="p-5">
+                <div className="eyebrow">The model</div>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Events arrive as a Poisson process and the prior on the rate is Gamma, which is
+                  conjugate. That gives principled shrinkage, a credible interval, and an explicit
+                  weight saying how much of the answer is your data rather than our judgment.
+                </p>
+              </Card>
+              <Card className="p-5">
+                <div className="eyebrow">The shrinkage</div>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Our prior carries three pseudo-observation years. One year of your history
+                  therefore earns 25% of the weight, three years earns 50%, ten years earns 77%. A
+                  customer with three months of history does not get a parameter derived from
+                  three months of history.
+                </p>
+              </Card>
+              <Card className="p-5">
+                <div className="eyebrow">The guarantee</div>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  With no relevant history the estimate returns our published triple exactly, to
+                  the last decimal. Connecting a system that cannot evidence a parameter does not
+                  move that parameter at all.
+                </p>
+              </Card>
+            </div>
+
+            <div className="mt-6 overflow-x-auto rounded-xl border border-rule">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="border-b border-rule bg-raised">
+                    {["What you have observed", "Our estimate becomes", "90% interval", "Weight on your data"].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left font-mono text-[0.58rem] uppercase tracking-wide text-muted">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="font-mono text-xs tabular-nums">
+                  {[
+                    ["Nothing", "0.458", "0.05 - 1.23", "0%"],
+                    ["1 year, no failures", "0.344", "0.03 - 0.92", "25%"],
+                    ["2 years, 1 failure", "0.475", "0.10 - 1.07", "40%"],
+                    ["5 years, 12 failures", "1.672", "1.00 - 2.49", "62%"],
+                    ["10 years, 4 failures", "0.413", "0.17 - 0.74", "77%"],
+                  ].map((row) => (
+                    <tr key={row[0]} className="border-b border-rule/60 last:border-0">
+                      {row.map((cell, i) => (
+                        <td key={i} className={`px-3 py-2 ${i === 0 ? "font-sans text-ink" : "text-ink"}`}>
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 font-mono text-[0.62rem] leading-relaxed text-muted">
+              Worked against a published starting rate of 0.458 events a year. Note the fourth row:
+              twelve failures in five years is a naive rate of 2.40, and the estimate lands at 1.672
+              rather than 2.40 because 38% of it is still our prior.
+            </p>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <Card className="p-5">
+                <div className="eyebrow">What is measurable</div>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Frequencies, mostly. Vendor failures from purchase orders received late against a
+                  contracted promise, customer churn from revenue that stops, schedule slippage from
+                  ordered-to-received dates.
+                </p>
+              </Card>
+              <Card className="p-5">
+                <div className="eyebrow">What is not</div>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Magnitudes, mostly. A ledger records what you paid a vendor, not what their late
+                  delivery cost you in expedited freight and lost margin. So an engine is honestly
+                  &quot;how often, measured; how much, our estimate&quot;, and provenance is tracked per
+                  parameter rather than per engine.
+                </p>
+              </Card>
+            </div>
+          </section>
+
           <section className="rounded-2xl border border-rule bg-raised p-6">
             <Eyebrow>On the parameters</Eyebrow>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink/85">{m.parameter_basis}</p>

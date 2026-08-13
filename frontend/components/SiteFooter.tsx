@@ -16,6 +16,7 @@ export function SiteFooter() {
           <Link href="/start" className="link-underline">Choose your industry</Link>
           <Link href="/methodology" className="link-underline">Methodology</Link>
           <Link href="/pricing" className="link-underline">Pricing</Link>
+          <Link href="/security" className="link-underline">Security</Link>
         </nav>
       </div>
       <div className="border-t border-rule">
