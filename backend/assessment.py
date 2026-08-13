@@ -12,13 +12,15 @@ and the fragility ranking is unstable at smaller samples.
 """
 from __future__ import annotations
 
+from canonical import Book
 from engines.composite import composite_risk_correlation
 from engines.decisions import rank_decisions
 from engines.constants import DEFAULT_SEED, N_SIMS
-from engines.modulation import apply_modulations
+from engines.modulation import apply_modulations, damped
 from engines.robustness import DEFAULT_EPS, robustness_assessment
 from agents.portfolio import build_recommendations, portfolio_interpretation
 from engines.sensitivity import sensitivity
+from estimation import estimate_marginals
 from industries import get_pack
 
 REVENUE_QUESTION = "annual_revenue"
@@ -105,13 +107,45 @@ def _apply_costs(decisions: list, overrides: dict | None, revenue_scale: float) 
     return out
 
 
-def _prepare(industry: str, answers: dict | None, correlation_overrides: dict | None, alpha: float):
-    """Resolve a pack plus intake answers into marginals and a matrix."""
+def _prepare(
+    industry: str,
+    answers: dict | None,
+    correlation_overrides: dict | None,
+    alpha: float,
+    book: Book | None = None,
+):
+    """Resolve a pack, connected history and intake answers into marginals.
+
+    Three layers, in this order and for a reason.
+
+    The estimator goes first because it sets parameters absolutely from observed
+    history, while intake and entity derivation are multipliers on top of a
+    starting estimate. Running them the other way round would multiply a
+    measurement by a guess about the same thing.
+
+    Intake and derivation then apply, damped by how much of each parameter the
+    measurement already explains. A vendor-failure rate estimated from purchase
+    orders already contains the concentration the operator described in intake,
+    so applying both at full strength counts one fact twice.
+
+    With `book=None` nothing above fires and this is byte-for-byte the v2 path,
+    which is the guarantee the pinned regression enforces.
+    """
     pack = get_pack(industry)
     answers = answers or {}
     revenue = answers.get(REVENUE_QUESTION) or pack.reference_revenue
     marginals = pack.marginals(revenue=revenue, alpha=alpha)
-    marginals, trail = apply_modulations(marginals, answers, pack.questions)
+
+    estimation = estimate_marginals(marginals, book)
+    marginals = estimation.marginals
+    # How much of an intake answer survives, per engine: all of it when nothing
+    # was measured, none of it when the measurement is authoritative.
+    damping = {
+        e.engine: 1.0 - e.weight_on_data
+        for e in estimation.estimates if e.parameter == "frequency"
+    }
+
+    marginals, trail = apply_modulations(marginals, answers, pack.questions, damping)
 
     # A deep pack derives parameters from the operator's own entities.
     facts: dict = {}
@@ -119,6 +153,7 @@ def _prepare(industry: str, answers: dict | None, correlation_overrides: dict | 
         facts, derived_trail = pack.derive(answers, marginals)
         mods = facts.pop("_modulations", {}) if facts else {}
         if mods:
+            mods = {k: damped(v, damping.get(k, 1.0)) for k, v in mods.items()}
             marginals = [
                 m if m.key not in mods else type(m)(
                     key=m.key, label=m.label,
@@ -131,7 +166,7 @@ def _prepare(industry: str, answers: dict | None, correlation_overrides: dict | 
         trail = trail + derived_trail
 
     corr, repaired = pack.matrix(correlation_overrides)
-    return pack, marginals, corr, repaired, trail, revenue, facts
+    return pack, marginals, corr, repaired, trail, revenue, facts, estimation
 
 
 def run_assessment(
@@ -145,10 +180,14 @@ def run_assessment(
     interpret: bool = False,
     include_decisions: bool = True,
     decision_costs: dict | None = None,
+    book: Book | None = None,
 ) -> dict:
-    """Composite risk for one industry, plus the sensitivity tornado."""
-    pack, marginals, corr, repaired, trail, revenue, facts = _prepare(
-        industry, answers, correlation_overrides, alpha
+    """Composite risk for one industry, plus the sensitivity tornado.
+
+    `book` is a connected customer's history. Without one this is v2 exactly.
+    """
+    pack, marginals, corr, repaired, trail, revenue, facts, estimation = _prepare(
+        industry, answers, correlation_overrides, alpha, book
     )
     out = composite_risk_correlation(
         marginals, corr, pack.id, n_sims=n_sims, seed=seed, matrix_repaired=repaired,
@@ -167,6 +206,8 @@ def run_assessment(
     )
     out["intake_adjustments"] = trail
     out["derived_facts"] = facts
+    # Provenance is surfaced, never buried: how much of this is their data.
+    out["estimation"] = estimation.public() if book is not None else None
     if include_sensitivity:
         out["sensitivity"] = sensitivity(marginals, corr, seed=seed)
     # The priced decisions. This is what an operator can actually act on, so it
@@ -194,10 +235,11 @@ def run_robustness(
     alpha: float = 1.0,
     eps: float = DEFAULT_EPS,
     seed: int = DEFAULT_SEED,
+    book: Book | None = None,
 ) -> dict:
     """The dependence-uncertainty layer. Slow by design; call it separately."""
-    pack, marginals, corr, _repaired, _trail, _rev, _facts = _prepare(
-        industry, answers, correlation_overrides, alpha
+    pack, marginals, corr, _repaired, _trail, _rev, _facts, _est = _prepare(
+        industry, answers, correlation_overrides, alpha, book
     )
     out = robustness_assessment(marginals, corr, eps=eps, seed=seed)
     out["industry"] = pack.id

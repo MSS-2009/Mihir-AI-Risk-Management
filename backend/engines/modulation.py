@@ -240,14 +240,41 @@ RULE_DESCRIPTIONS = {
 }
 
 
+def damped(mod: "Modulation", keep: float) -> "Modulation":
+    """Fade a multiplier toward neutral as measured evidence takes over.
+
+    An intake answer and a measurement can describe the same thing twice. If a
+    vendor-failure frequency has been estimated from purchase-order history,
+    that history already contains whatever concentration the operator described
+    in intake, and multiplying by it again counts the same fact twice.
+
+    `keep` is `1 - weight_on_data`: with no measurement the answer applies in
+    full, and as evidence accumulates the multiplier fades toward 1.0. Fading
+    rather than switching avoids a cliff on the day a parameter crosses the
+    "measured" threshold.
+    """
+    if keep >= 1.0:
+        return mod
+    k = max(0.0, min(1.0, keep))
+    return Modulation(
+        frequency=1.0 + (mod.frequency - 1.0) * k,
+        magnitude=1.0 + (mod.magnitude - 1.0) * k,
+    )
+
+
 def apply_modulations(
-    marginals: list, answers: dict, questions: list
+    marginals: list, answers: dict, questions: list,
+    damping: dict[str, float] | None = None,
 ) -> tuple[list, list[dict]]:
     """Apply intake answers to the pack's starting estimates.
 
     Returns (modulated marginals, audit trail). The audit trail is what makes
     this defensible: every adjustment is reported with the question that caused
     it, the rule that implemented it, and the exact multipliers applied.
+
+    `damping` maps an engine to how much of the intake answer still applies,
+    which is `1 - weight_on_data` from the estimator. Absent or empty, every
+    answer applies in full and the result is identical to v2.
     """
     by_engine: dict[str, Modulation] = {}
     trail: list[dict] = []
@@ -280,9 +307,12 @@ def apply_modulations(
             }
         )
 
+    damping = damping or {}
     out = []
     for m in marginals:
         mod = by_engine.get(m.key)
+        if mod is not None and m.key in damping:
+            mod = damped(mod, damping[m.key])
         if not mod or mod.is_neutral:
             out.append(m)
             continue
