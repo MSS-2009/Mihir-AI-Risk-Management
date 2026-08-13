@@ -14,6 +14,16 @@ import llm  # noqa: E402
 
 llm.client = None  # hard-disable AI for this module
 
+from agents import portfolio as _portfolio  # noqa: E402
+
+# `agents.portfolio` does `from llm import client`, which binds the VALUE at its
+# own import time. Nulling `llm.client` therefore only reaches it if this module
+# imported first, which made these tests quietly order-dependent: any test file
+# collected earlier that imported `assessment` would let a real client through
+# and the narrative assertions would run against live output. Null the binding
+# portfolio actually reads.
+_portfolio.client = None
+
 from agents.portfolio import BANNED_CLAIMS, check_claims  # noqa: E402
 from assessment import run_assessment, run_robustness  # noqa: E402
 from industries import INDUSTRY_REGISTRY  # noqa: E402
