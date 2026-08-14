@@ -53,6 +53,35 @@ export const getIndustries = () => req<{ industries: Industry[] }>("/industries"
 export const getModels = () => req<ModelsResponse>("/models");
 export const getShowcase = () => req<ShowcaseResponse>("/showcase");
 
+/** Create an organisation and receive its one-time token. */
+export const createOrganization = (body: {
+  name: string; industry_pack: string; reference_revenue?: number;
+}) => req<CreateOrgResponse>("/organizations", { method: "POST", body: JSON.stringify(body) });
+
+/** Everything the connect page needs about one organisation, with its token. */
+export async function orgGet<T>(orgId: string, path: string, token: string): Promise<T> {
+  return req<T>(`/organizations/${orgId}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export interface CreateOrgResponse {
+  organization: { id: string; name: string; industry_pack: string; reference_revenue: number };
+  token: string;
+  token_id: string;
+  note: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  at: string;
+  action: string;
+  component: string;
+  detail: string;
+  record_counts: Record<string, number>;
+  token_id: string;
+}
+
 export const assess = (body: AssessRequest) =>
   req<Assessment>("/assess", { method: "POST", body: JSON.stringify(body) });
 

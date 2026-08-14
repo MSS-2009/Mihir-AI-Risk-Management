@@ -33,3 +33,6 @@ Thumbs.db
 
 # === Scratch / local ===
 *.rtf
+
+# Local file-backed store (customer data; never committed)
+backend/.data/

@@ -22,6 +22,7 @@ from agents.portfolio import build_recommendations, portfolio_interpretation
 from engines.sensitivity import sensitivity
 from estimation import estimate_marginals
 from industries import get_pack
+from storage import Store
 
 REVENUE_QUESTION = "annual_revenue"
 
@@ -167,6 +168,20 @@ def _prepare(
 
     corr, repaired = pack.matrix(correlation_overrides)
     return pack, marginals, corr, repaired, trail, revenue, facts, estimation
+
+
+def book_for_organization(store: "Store", org_id: str):
+    """The latest stored snapshot for an organisation, as a canonical Book.
+
+    This is the inversion in one function. v2 took data in the request body; a
+    connected product reads what already arrived, from whichever source put it
+    there. Returns None when nothing has been ingested, and the assessment then
+    runs exactly as v2 did.
+    """
+    from ingest import payload_to_book
+
+    payload = store.latest_snapshot(org_id)
+    return payload_to_book(org_id, payload) if payload else None
 
 
 def run_assessment(

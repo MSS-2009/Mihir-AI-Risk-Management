@@ -12,6 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import api_org
 from assessment import run_assessment, run_robustness
 from connectors import PROFILES, FixtureProvider
 from documents import REQUIRED_DOCS, build_checklist, ingest_files, scan_signals
@@ -32,6 +33,11 @@ app = FastAPI(title="Avenoir")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
+
+# Organisation-scoped routes: the only surface that touches stored customer
+# data, kept in one readable file so the auth, isolation and audit guarantees
+# can be checked end to end.
+app.include_router(api_org.router)
 
 
 class AssessRequest(BaseModel):

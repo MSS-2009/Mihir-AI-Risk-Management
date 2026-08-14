@@ -13,7 +13,8 @@ export function SiteFooter() {
         </div>
         <nav className="grid grid-cols-2 gap-x-12 gap-y-2 text-sm">
           <Link href="/dashboard" className="link-underline">Dashboard</Link>
-          <Link href="/start" className="link-underline">Choose your industry</Link>
+          <Link href="/connect" className="link-underline">Connect a system</Link>
+          <Link href="/manual" className="link-underline">Manual entry</Link>
           <Link href="/methodology" className="link-underline">Methodology</Link>
           <Link href="/pricing" className="link-underline">Pricing</Link>
           <Link href="/security" className="link-underline">Security</Link>

@@ -6,11 +6,15 @@ import { getHealth } from "@/lib/api";
 import { AvenoirMark } from "./AvenoirMark";
 import { ThemeToggle } from "./ThemeToggle";
 
+// v3 inverted the product: it lives inside a customer's systems rather than
+// being a form they fill in, so Connect is the front door and the questionnaire
+// sits behind "Manual".
 const LINKS = [
-  { href: "/start", label: "Start" },
+  { href: "/connect", label: "Connect" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/methodology", label: "Methodology" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/manual", label: "Manual" },
 ];
 
 export function SiteNav() {
