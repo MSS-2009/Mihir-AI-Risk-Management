@@ -15,11 +15,11 @@ Two credentials do two different jobs and are easy to confuse:
   SUPABASE_ACCESS_TOKEN       a personal access token (sbp_...) that runs DDL
                               through the Management API. Only needed here.
 
-The access token is not needed to run Avenoir, only to create the tables once,
-so it belongs in your shell for one command rather than in .env:
-
-    export SUPABASE_ACCESS_TOKEN=sbp_...      # Account > Access Tokens
-    python supabase/apply.py
+Set SUPABASE_ACCESS_TOKEN in backend/.env alongside the others and this picks
+it up. It is an ADMIN credential rather than a runtime one: Avenoir never reads
+it while serving a request, so it stays out of Render's environment. Creating
+tables is something a developer does once from a laptop, not something an
+internet-facing web service needs the power to do.
 
 The verify pass writes to a throwaway organisation and deletes it at the end, so
 it is safe against a project that already holds real data.
@@ -200,8 +200,8 @@ def main() -> None:
             print(
                 "\n  SUPABASE_ACCESS_TOKEN is not set, so the tables cannot be created\n"
                 "  from here. Either:\n\n"
-                "    a) export SUPABASE_ACCESS_TOKEN=sbp_...   (Account > Access Tokens)\n"
-                "       and run this again, or\n"
+                "    a) add SUPABASE_ACCESS_TOKEN=sbp_... to backend/.env\n"
+                "       (Supabase > Account > Access Tokens) and run this again, or\n"
                 f"    b) paste {SCHEMA.relative_to(ROOT)} into the SQL editor and run\n"
                 "       python supabase/apply.py --verify\n"
             )

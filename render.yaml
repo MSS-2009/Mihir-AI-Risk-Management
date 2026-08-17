@@ -1,6 +1,13 @@
 # Render Blueprint for the Avenoir backend (FastAPI).
 # In Render: New + > Blueprint > connect this repo. Render reads this file.
-# Then set ANTHROPIC_API_KEY in the service's Environment tab (marked sync:false).
+#
+# `sync: false` means "this key exists, but its value is set by hand in the
+# dashboard and never appears in git". backend/.env is gitignored, so it is
+# never uploaded anywhere: Render reads this file plus whatever is typed into
+# the service's Environment tab, and nothing else. A credential that works
+# locally therefore does nothing in production until it is also entered there.
+#
+# Run `python scripts/preflight.py --deploy` for the current checklist.
 services:
   - type: web
     name: avenoir-api
@@ -12,8 +19,30 @@ services:
     healthCheckPath: /
     envVars:
       - key: ANTHROPIC_API_KEY
-        sync: false # set this manually in the Render dashboard, never in git
+        sync: false # set manually in the dashboard, never in git
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-5
       - key: PYTHON_VERSION
         value: "3.12"
+
+      # Persistence. Without these the service falls back to the file store,
+      # which on Render's free plan lives on a disk that is wiped on every
+      # deploy, so a customer's snapshots would silently vanish on the next
+      # push. Both are required together; the code checks for both before
+      # choosing Supabase.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # bypasses row-level security: server-side only, never the browser
+
+      # Connectors. Absent, the app runs on fixtures and manual intake, which is
+      # the correct behaviour for a demo rather than an error.
+      - key: MERGE_API_KEY
+        sync: false
+      - key: MERGE_ENVIRONMENT
+        value: sandbox
+
+# SUPABASE_ACCESS_TOKEN is deliberately NOT here. It creates and drops tables,
+# and this service has no reason to do either. Table creation is a developer
+# action run once from a laptop; granting it to an internet-facing web service
+# adds the ability to destroy every stored record and buys nothing.
