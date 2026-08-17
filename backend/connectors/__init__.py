@@ -11,6 +11,7 @@ from .base import (
     SyncIncomplete,
 )
 from .fixtures import MIDMARKET_NETSUITE, PROFILES, SME_QUICKBOOKS, FixtureProvider, PlantedTruth
+from .merge_provider import MergeProvider
 
 __all__ = [
     "ConnectorProvider",
@@ -22,4 +23,5 @@ __all__ = [
     "PROFILES",
     "SME_QUICKBOOKS",
     "MIDMARKET_NETSUITE",
+    "MergeProvider",
 ]

@@ -18,15 +18,27 @@ from .base import (
     now_iso,
 )
 from .files import FileStore
+from .supabase_store import SupabaseError, SupabaseStore
 
 _store: Store | None = None
 
 
 def get_store() -> Store:
-    """The process-wide store. One line changes when Supabase arrives."""
+    """The process-wide store.
+
+    Supabase when it is configured, files otherwise. Selecting by configuration
+    rather than by a flag means a deployment with credentials uses the database
+    and local development keeps working with nothing installed, without either
+    path being a special case in the code above.
+    """
     global _store
     if _store is None:
-        _store = FileStore(os.getenv("AVENOIR_DATA_DIR") or None)
+        url = os.getenv("SUPABASE_URL", "").strip()
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        if url and key:
+            _store = SupabaseStore(url, key)
+        else:
+            _store = FileStore(os.getenv("AVENOIR_DATA_DIR") or None)
     return _store
 
 
@@ -37,6 +49,6 @@ def set_store(store: Store) -> None:
 
 
 __all__ = [
-    "Store", "FileStore", "Organization", "Token", "AuditEntry",
+    "Store", "FileStore", "SupabaseStore", "SupabaseError", "Organization", "Token", "AuditEntry",
     "get_store", "set_store", "new_token", "hash_token", "now_iso", "Path",
 ]
