@@ -219,6 +219,39 @@ def test_a_book_with_no_dated_records_is_refused():
         p.fetch("token", "acc1")
 
 
+def test_preflight_names_the_look_alike_product():
+    """A Merge Gateway key returns exactly the same 401 body as a bad Merge key.
+    Guessing between them cost an evening once; it must not cost a second."""
+    out = MergeProvider(api_key="mg__WZLexample").preflight()
+    assert out["ok"] is False
+    assert out["reason"] == "wrong_product"
+    assert "merge.dev" in out["detail"]
+
+
+def test_preflight_distinguishes_a_missing_key_from_a_rejected_one():
+    assert MergeProvider(api_key="").preflight()["reason"] == "no_key"
+
+    p = MergeProvider(api_key="realish_key")
+
+    def reject(path, token, params=None):
+        raise SyncIncomplete("Merge /linked-accounts returned 401: nope")
+
+    p._get = reject
+    out = p.preflight()
+    assert out["reason"] == "rejected"
+    assert "Production" in out["detail"]
+
+
+def test_preflight_reports_a_working_key_with_no_accounts_as_working():
+    """'Zero linked accounts' is a setup step, not a broken key, and conflating
+    the two sends someone to regenerate a credential that was already fine."""
+    p = MergeProvider(api_key="realish_key")
+    p._get = lambda path, token, params=None: {"count": 0, "results": []}
+    out = p.preflight()
+    assert out["ok"] is True
+    assert "Merge Link" in out["detail"]
+
+
 def test_a_merge_book_flows_through_the_estimator():
     """The whole point of the canonical boundary: the estimator cannot tell a
     Merge book from a fixture one."""

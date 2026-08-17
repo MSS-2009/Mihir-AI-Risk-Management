@@ -1,6 +1,11 @@
 -- Avenoir v3 schema.
 --
--- Paste this into the Supabase SQL editor (Dashboard > SQL Editor > New query).
+-- Apply it with `python supabase/apply.py`, which also round-trips the store
+-- against the real project afterwards. Pasting it into the SQL editor
+-- (Dashboard > SQL Editor > New query) works too; follow that with
+-- `python supabase/apply.py --verify`, because tables existing proves nothing
+-- about their columns agreeing with the code that reads them.
+--
 -- Safe to run more than once.
 --
 -- A note on what row-level security is actually doing here, because it is easy

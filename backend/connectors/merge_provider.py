@@ -133,6 +133,67 @@ class MergeProvider:
             f"{path} exceeded {MAX_PAGES} pages; refusing to write a truncated snapshot"
         )
 
+    # -- onboarding diagnostics ---------------------------------------------
+
+    def preflight(self) -> dict:
+        """Say whether this key can talk to Merge, and if not, why.
+
+        Onboarding failures here are almost never "the key is wrong" in the way
+        the word suggests. They are a key for the wrong environment, or for a
+        different product entirely, and Merge's own 401 body ("Invalid
+        Production Key.") reads identically in every case. Returning a diagnosis
+        rather than a boolean is the difference between a minute and an evening.
+
+        Read-only and cheap: one call to an endpoint that lists nothing
+        sensitive.
+        """
+        key = (self.api_key or "").strip()
+        if not key:
+            return {"ok": False, "reason": "no_key",
+                    "detail": "MERGE_API_KEY is not set."}
+
+        # Merge issues production and test access keys with no shared prefix.
+        # An 'mg_' key belongs to Merge Gateway, an unrelated LLM-routing
+        # product with a confusingly similar name; its keys will never
+        # authenticate here however many are generated.
+        if key.startswith("mg_"):
+            return {
+                "ok": False, "reason": "wrong_product",
+                "detail": (
+                    "This is a Merge Gateway key (an LLM routing service), not a "
+                    "Merge unified-API key. Avenoir needs an account at "
+                    "merge.dev, whose dashboard shows Linked Accounts and "
+                    "Integrations rather than projects and token spend."
+                ),
+            }
+
+        try:
+            page = self._get("/linked-accounts", "", {"page_size": 1})
+        except SyncIncomplete as e:
+            msg = str(e)
+            if "401" in msg or "403" in msg:
+                return {
+                    "ok": False, "reason": "rejected",
+                    "detail": (
+                        "Merge rejected the key. If it came from the Test section "
+                        "of the dashboard it cannot reach production endpoints; "
+                        "take the Production key, or set MERGE_ENVIRONMENT=sandbox "
+                        "and link a sandbox account."
+                    ),
+                }
+            return {"ok": False, "reason": "unreachable", "detail": msg}
+
+        linked = int(page.get("count") or len(page.get("results") or []))
+        return {
+            "ok": True, "reason": "authenticated",
+            "linked_accounts": linked,
+            "detail": (
+                f"{linked} linked account(s)." if linked else
+                "The key works. No accounts are linked yet, so run Merge Link "
+                "once to connect a system before syncing."
+            ),
+        }
+
     # -- provider protocol --------------------------------------------------
 
     def authorise(self, organization_id: str, **kw) -> str:
