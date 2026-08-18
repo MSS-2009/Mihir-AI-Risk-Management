@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -71,11 +72,21 @@ def run_ddl(ref: str, token: str, sql: str) -> None:
     )
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Content-Type", "application/json")
+    # The Management API sits behind Cloudflare, which rejects urllib's default
+    # User-Agent as bot traffic (error 1010) before Supabase ever sees the
+    # request. The 403 that comes back is indistinguishable from a bad token.
+    req.add_header("User-Agent", "avenoir-apply/3.0")
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             r.read()
     except urllib.error.HTTPError as e:
         body = e.read().decode()[:600]
+        if "1010" in body:
+            raise SystemExit(
+                "  Cloudflare blocked the request (error 1010), so the token was "
+                "never checked.\n  This is a client problem, not a credential "
+                "problem; the User-Agent header is missing."
+            )
         if e.code in (401, 403):
             raise SystemExit(
                 f"  the access token was rejected ({e.code}).\n"
@@ -87,13 +98,29 @@ def run_ddl(ref: str, token: str, sql: str) -> None:
         raise SystemExit(f"  the schema failed to apply ({e.code}): {body}")
 
 
-def tables_present(url: str, key: str) -> dict[str, bool]:
-    """Ask PostgREST which tables it can see, using the key the app will use."""
+def tables_present(url: str, key: str, settle: bool = False) -> dict[str, bool]:
+    """Ask PostgREST which tables it can see, using the key the app will use.
+
+    `settle` retries for a while. PostgREST caches the database schema and
+    reloads it asynchronously, so for a few seconds after the DDL commits the
+    tables exist in Postgres and are still invisible over REST. Reporting that
+    as "not created" sends someone to debug a schema that is already correct.
+    """
+    deadline = time.monotonic() + (30.0 if settle else 0.0)
+    while True:
+        present = _probe(url, key)
+        if all(present.values()) or time.monotonic() >= deadline:
+            return present
+        time.sleep(2.0)
+
+
+def _probe(url: str, key: str) -> dict[str, bool]:
     present = {}
     for t in TABLES:
         req = urllib.request.Request(f"{url.rstrip('/')}/rest/v1/{t}?select=*&limit=1")
         req.add_header("apikey", key)
         req.add_header("Authorization", f"Bearer {key}")
+        req.add_header("User-Agent", "avenoir-apply/3.0")
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 r.read()
@@ -211,7 +238,7 @@ def main() -> None:
         print("  applied")
 
     print("checking tables...")
-    present = tables_present(url, key)
+    present = tables_present(url, key, settle=not verify_only)
     for t, ok in present.items():
         print(f"  {'ok     ' if ok else 'MISSING'} {t}")
     if not all(present.values()):
