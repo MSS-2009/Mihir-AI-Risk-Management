@@ -67,10 +67,34 @@ class AnalyzeRequest(BaseModel):
     params: Optional[dict] = None
 
 
+def _storage_status() -> dict:
+    """Which store is live, without revealing a credential.
+
+    This is the only way to tell from outside whether the deployment actually
+    got its Supabase settings. The failure it catches is silent by design: with
+    the variables unset the app does not error, it falls back to the file store
+    and keeps serving, on a disk that Render's free plan wipes on every deploy.
+    Everything looks healthy right up until a customer's snapshots are gone.
+    """
+    from storage import FileStore, get_store
+
+    store = get_store()
+    ephemeral = isinstance(store, FileStore)
+    return {
+        "backend": "files" if ephemeral else "supabase",
+        "durable": not ephemeral,
+        "warning": (
+            "Snapshots are on local disk and will be lost on the next deploy. "
+            "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+        ) if ephemeral else None,
+    }
+
+
 @app.get("/")
 def health():
     return {
         "status": "ok",
+        "storage": _storage_status(),
         "ai_enabled": ai_enabled(),
         "features": features_public(),
         "scaffolds": scaffold_status(),

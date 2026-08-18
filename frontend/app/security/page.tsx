@@ -48,7 +48,15 @@ const NOW = [
   },
   {
     q: "Is our data used to train anything?",
-    a: "No. It is not used to train models, and it is not pooled across customers. Document text is sent to the Anthropic API for classification and extraction during an upload; nothing else leaves the system.",
+    a: "No. It is not used to train models, and it is not pooled across customers today. Document text is sent to the Anthropic API for classification and extraction during an upload; nothing else leaves the system. We are building peer benchmarks, and rather than change this answer quietly later: that will be opt-out, stated before it ships, and will pool one number per parameter across at least eight organisations, never records. You would keep receiving benchmarks whether or not you feed them.",
+  },
+  {
+    q: "What happens if you lose our data?",
+    a: "Snapshots are append-only, so there is no code path that edits or overwrites one; a correction arrives as a new dated row. Backups are taken and, more to the point, the restore has actually been run: a full book was written, purged, and recovered with its record counts intact. A restore that has never been executed is a belief rather than a control.",
+  },
+  {
+    q: "Could a bug in your code show us another customer's book?",
+    a: "Two independent layers would both have to fail. The application check resolves your organisation from your token on every request, and row-level security in the database is keyed by organisation underneath it. A mismatched organisation returns 404 rather than 403, so the API does not confirm that another customer exists.",
   },
   {
     q: "Is it encrypted?",
@@ -61,6 +69,39 @@ const NOT_YET = [
   ["Penetration test", "Not yet commissioned. Planned before the first customer with production data."],
   ["Single sign-on and SCIM", "Not built. Reasonable to ask for, and not there today."],
   ["Customer-managed keys", "Not built."],
+  ["Rate limiting and a WAF", "Not in front of the API yet. Committed before any production customer data."],
+  ["Point-in-time recovery", "Our own backups run and restore correctly. Database-level point-in-time recovery is a hosting plan we take before the first production customer, not after."],
+];
+
+/**
+ * Every claim above is enforced by something, and this says by what. A control
+ * described in prose is a policy; a control an assertion fails on is a control.
+ */
+const ENFORCED = [
+  [
+    "There is no write path",
+    "The connector protocol declares no write method, so there is nothing to call. A test asserts that no public method on a provider begins with create, update, write, post, delete or patch.",
+  ],
+  [
+    "Tokens cannot be replayed from our database",
+    "Only a SHA-256 hash is stored, and lookup happens by hash, so a plaintext token never reaches the database or a query log. Verified against the live database, not only in a unit test.",
+  ],
+  [
+    "History cannot be silently rewritten",
+    "Snapshots are inserted, never upserted. Re-sending an existing identifier collides on the primary key. A test asserts the request never carries the header that would turn an insert into an overwrite.",
+  ],
+  [
+    "Deleting actually deletes",
+    "One action removes the organisation and the schema cascades to every row it owns, so there is no partial state where snapshots are gone and tokens still authenticate. Executed against the live database as part of verification.",
+  ],
+  [
+    "A partial read never becomes a partial answer",
+    "If a sync cannot complete, it raises rather than writing what it managed to fetch. Half the purchase orders would read downstream as half the late deliveries, which is a flattering number nobody earned.",
+  ],
+  [
+    "Risk engines cannot see connector internals",
+    "A test asserts that no module under the modelling packages imports from the connector package, so a vendor's field names can never become part of a risk calculation.",
+  ],
 ];
 
 export default function SecurityPage() {
@@ -93,6 +134,24 @@ export default function SecurityPage() {
             <div key={q}>
               <h3 className="font-display text-base font-bold leading-snug text-ink">{q}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{a}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* A control described in prose is a policy. This is what enforces each one. */}
+      <section className="mt-12">
+        <h2 className="font-display text-2xl font-bold text-ink">How each of those is enforced</h2>
+        <p className="mt-2 max-w-2xl text-sm text-muted">
+          Anyone can write the paragraphs above. These are the mechanisms underneath them, and
+          in most cases the thing enforcing the guarantee is that the alternative does not exist
+          in the code rather than that we remembered not to do it.
+        </p>
+        <div className="mt-5 grid gap-x-10 gap-y-6 lg:grid-cols-2">
+          {ENFORCED.map(([claim, how]) => (
+            <div key={claim} className="border-l-2 border-brand/40 pl-4">
+              <h3 className="font-display text-sm font-bold leading-snug text-ink">{claim}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">{how}</p>
             </div>
           ))}
         </div>
